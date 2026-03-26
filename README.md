@@ -16,14 +16,16 @@ npm run dev
 Tính năng này chỉ làm một việc: dùng **webcam laptop** để nhận diện cử chỉ tay và **bật/tắt quạt**.
 
 ## Cử chỉ
-| Gestures                  | Actions                   |
-| `Open_Palm`               | BẬT quạt                  |
-| `Closed_Fist`             | TẮT quạt                  |
-| `Thumb_Up`                | Bật chế độ quay của quạt  |
-| `Thumb_Down`              | Tắt chế độ quay của quạt  |
-| `index`                   | Speed 1                   |
-| `index + middle`          | Speed 2                   |
-| `index + middle + ring`   | Speed 3                   |
+| Cử chỉ                     | Mô tả                       | Chức năng                       |
+| -------------------------- | --------------------------- | ------------------------------- |
+| ✋ `Open_Palm`             | Mở bàn tay                  | **BẬT quạt**                    |
+| ✊ `Closed_Fist`           | Nắm tay                     | **TẮT quạt**                    |
+| 👍 `Thumb_Up`              | Ngón cái hướng lên          | **Bật chế độ quay (SWING ON)**  |
+| 👎 `Thumb_Down`            | Ngón cái hướng xuống        | **Tắt chế độ quay (SWING OFF)** |
+| ☝️ `Index`                 | 1 ngón trỏ                  | **Speed 1**                     |
+| ✌️ `Index + Middle`        | 2 ngón (trỏ + giữa)         | **Speed 2**                     |
+| 🤟 `Index + Middle + Ring` | 3 ngón (trỏ + giữa + áp út) | **Speed 3**                     |
+
 *Lưu ý*: Khi chỉnh SPEED thì phải giữ nguyên và hướng mu bàn tay về webcam
 
 ## Yêu cầu
