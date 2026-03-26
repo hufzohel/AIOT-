@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Model files
+*.task
+
+# Env
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Optional
+requirements.txt
