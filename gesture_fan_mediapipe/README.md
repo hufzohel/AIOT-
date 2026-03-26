@@ -1,16 +1,3 @@
-## run 
-### backend - terminal 1
-```
-cd backend
-npm start
-```
-
-### frontend - terminal 2
-```
-cd frontend
-npm run dev
-```
-
 # Gesture Fan Control (MediaPipe + Webcam)
 
 Tính năng này chỉ làm một việc: dùng **webcam laptop** để nhận diện cử chỉ tay và **bật/tắt quạt**.
