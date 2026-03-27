@@ -28,10 +28,7 @@ export default function LightChart({ data }) {
             tick={{ fontSize: 12, fill: "#94a3b8" }}
             axisLine={{ stroke: "#e2e8f0" }}
           />
-          <YAxis
-            tick={{ fontSize: 12, fill: "#94a3b8" }}
-            axisLine={{ stroke: "#e2e8f0" }}
-          />
+          <YAxis tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={{ stroke: "#e2e8f0" }} />
           <Tooltip
             contentStyle={{
               background: "#fff",

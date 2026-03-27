@@ -14,6 +14,7 @@ export default function DashboardPage({ userId: propUserId }) {
   const targetUserId = propUserId || user?.id;
 
   useEffect(() => {
+    if (!targetUserId) return;
     setLoading(true);
     axios
       .get("/api/sensors", { params: { userId: targetUserId } })
@@ -39,42 +40,19 @@ export default function DashboardPage({ userId: propUserId }) {
       {!propUserId && (
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
-          <p className="text-slate-500 text-sm mt-1">
-            Tổng quan hệ thống nhà thông minh
-          </p>
+          <p className="text-slate-500 text-sm mt-1">Tổng quan hệ thống nhà thông minh</p>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <StatCard
-          icon={Thermometer}
-          label="Nhiệt độ"
-          value={latestTemp}
-          unit="°C"
-          color="bg-primary-600"
-        />
-        <StatCard
-          icon={Droplets}
-          label="Độ ẩm"
-          value={latestHumid}
-          unit="%"
-          color="bg-primary-500"
-        />
-        <StatCard
-          icon={Sun}
-          label="Ánh sáng"
-          value={latestLight}
-          unit="lux"
-          color="bg-accent-500"
-        />
+        <StatCard icon={Thermometer} label="Nhiệt độ" value={latestTemp} unit="°C" color="bg-primary-600" />
+        <StatCard icon={Droplets} label="Độ ẩm" value={latestHumid} unit="%" color="bg-primary-500" />
+        <StatCard icon={Sun} label="Ánh sáng" value={latestLight} unit="lux" color="bg-accent-500" />
       </div>
 
       {sensors && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <SensorChart
-            data={sensors}
-            title="Nhiệt độ & Độ ẩm theo thời gian"
-          />
+          <SensorChart data={sensors} title="Nhiệt độ & Độ ẩm theo thời gian" />
           <LightChart data={sensors.light} />
         </div>
       )}

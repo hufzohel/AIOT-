@@ -58,10 +58,7 @@ export default function SensorChart({ data, title }) {
               fontSize: "13px",
             }}
           />
-          <Legend
-            wrapperStyle={{ fontSize: "13px" }}
-            iconType="circle"
-          />
+          <Legend wrapperStyle={{ fontSize: "13px" }} iconType="circle" />
           <Line
             yAxisId="temp"
             type="monotone"

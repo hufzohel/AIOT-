@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Mail, User } from "lucide-react";
+import { ArrowLeft, Mail, User, ScanFace } from "lucide-react";
 import axios from "axios";
 import DashboardPage from "./DashboardPage";
 import DevicesPage from "./DevicesPage";
@@ -42,11 +42,21 @@ export default function UserDetailPage() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-slate-800">{userInfo.name}</h2>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex flex-wrap items-center gap-2 mt-1">
             <Mail className="w-3.5 h-3.5 text-slate-400" />
             <span className="text-sm text-slate-500">{userInfo.email}</span>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium bg-primary-100 text-primary-700">
               {userInfo.role}
+            </span>
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-medium ${
+                userInfo.faceAuth?.enabled
+                  ? "bg-green-100 text-green-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              <ScanFace className="w-3.5 h-3.5" />
+              {userInfo.faceAuth?.enabled ? "Đã đăng ký face" : "Chưa đăng ký face"}
             </span>
           </div>
         </div>
@@ -71,13 +81,7 @@ export default function UserDetailPage() {
         ))}
       </div>
 
-      <div>
-        {tab === "dashboard" ? (
-          <DashboardPage userId={parseInt(id)} />
-        ) : (
-          <DevicesPage userId={parseInt(id)} />
-        )}
-      </div>
+      <div>{tab === "dashboard" ? <DashboardPage userId={Number(id)} /> : <DevicesPage userId={Number(id)} />}</div>
     </div>
   );
 }

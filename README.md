@@ -1,13 +1,74 @@
-## run 
-### backend - terminal 1
-```
-cd backend
-npm start
+# Smart Home Dashboard with Face Recognition (OpenCV)
+
+## Giới thiệu
+
+Đây là hệ thống web quản lý thiết bị Smart Home với các tính năng:
+
+- Quản lý thiết bị (bật/tắt, trạng thái online/offline) bằng cử chỉ
+- Phân quyền người dùng (Admin / Member)
+- Đăng nhập bằng mật khẩu
+- Đăng nhập bằng **xác thực khuôn mặt (Face Recognition)**
+
+Hệ thống sử dụng:
+- **Frontend:** React (Vite)
+- **Backend:** FastAPI (Python)
+- **Computer Vision:** OpenCV (YuNet + SFace)
+
+---
+
+## Tính năng chính
+
+### Người dùng
+- Đăng nhập bằng email/password
+- Đăng nhập bằng khuôn mặt
+- Cập nhật khuôn mặt (chụp 5 ảnh mẫu)
+
+### Phân quyền
+- **Admin:** toàn quyền quản lý
+- **Member:** chỉ sử dụng thiết bị được cấp
+
+### Thiết bị
+- Hiển thị trạng thái:
+  - Online / Offline
+  - ON / OFF (badge riêng)
+
+---
+
+## Cài đặt & chạy project
+
+### 1. Clone project
+
+```bash
+git clone <your-repo>
+cd project
 ```
 
-### frontend - terminal 2
+#### Backend (FastAPI + OpenCV)
+
+```bash
+cd backend
+
+# tạo venv
+python3 -m venv .venv
+source .venv/bin/activate   # macOS/Linux
+# .venv\Scripts\activate   # Windows
+
+# cài thư viện
+pip install -r requirements.txt
+
+# tải model OpenCV
+python tools/download_models.py
+
+# chạy server
+uvicorn main:app --reload --port 4000
 ```
+
+#### Frontend (React + Vite)
+
+```bash
 cd frontend
+
+npm install
 npm run dev
 ```
 

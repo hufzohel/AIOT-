@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Layout from "./components/Layout";
 import LoginPage from "./pages/LoginPage";
@@ -7,6 +7,7 @@ import DevicesPage from "./pages/DevicesPage";
 import UsersPage from "./pages/UsersPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import LogsPage from "./pages/LogsPage";
+import ProfilePage from "./pages/ProfilePage";
 
 function AdminRoute({ children }) {
   const { user } = useAuth();
@@ -20,16 +21,18 @@ function UserRoute({ children }) {
   return children;
 }
 
+function PrivateRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (user) {
-    return (
-      <Navigate
-        to={user.role === "ADMIN" ? "/users" : "/dashboard"}
-        replace
-      />
-    );
+    return <Navigate to={user.role === "ADMIN" ? "/users" : "/dashboard"} replace />;
   }
   return children;
 }
@@ -53,7 +56,14 @@ export default function App() {
               </PublicRoute>
             }
           />
-          <Route path="/" element={<Layout />}>
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <Layout />
+              </PrivateRoute>
+            }
+          >
             <Route index element={<DefaultRedirect />} />
             <Route
               path="dashboard"
@@ -95,6 +105,7 @@ export default function App() {
                 </AdminRoute>
               }
             />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
           <Route path="*" element={<DefaultRedirect />} />
         </Routes>

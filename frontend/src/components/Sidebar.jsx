@@ -6,6 +6,7 @@ import {
   ScrollText,
   LogOut,
   Home,
+  User,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -33,9 +34,7 @@ export default function Sidebar() {
           <Home className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="text-white font-bold text-lg leading-tight">
-            AIoT Home
-          </h1>
+          <h1 className="text-white font-bold text-lg leading-tight">AIoT Home</h1>
           <p className="text-blue-200 text-xs">Smart Living</p>
         </div>
       </div>
@@ -51,6 +50,10 @@ export default function Sidebar() {
               <ScrollText className="w-5 h-5" />
               Nhật ký hệ thống
             </NavLink>
+            <NavLink to="/profile" className={linkClass}>
+              <User className="w-5 h-5" />
+              Hồ sơ
+            </NavLink>
           </>
         ) : (
           <>
@@ -62,6 +65,10 @@ export default function Sidebar() {
               <Cpu className="w-5 h-5" />
               Thiết bị
             </NavLink>
+            <NavLink to="/profile" className={linkClass}>
+              <User className="w-5 h-5" />
+              Hồ sơ
+            </NavLink>
           </>
         )}
       </nav>
@@ -72,9 +79,7 @@ export default function Sidebar() {
             {user?.name?.charAt(0) || "U"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">
-              {user?.name}
-            </p>
+            <p className="text-white text-sm font-medium truncate">{user?.name}</p>
             <p className="text-blue-200 text-xs">{user?.role}</p>
           </div>
         </div>

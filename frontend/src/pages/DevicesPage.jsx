@@ -13,6 +13,7 @@ export default function DevicesPage({ userId: propUserId }) {
   const targetUserId = propUserId || user?.id;
 
   useEffect(() => {
+    if (!targetUserId) return;
     axios
       .get("/api/devices", { params: { userId: targetUserId } })
       .then((res) => setDevices(res.data));
@@ -20,7 +21,9 @@ export default function DevicesPage({ userId: propUserId }) {
 
   const handleToggle = async (id) => {
     try {
-      const res = await axios.post(`/api/devices/${id}/toggle`);
+      const res = await axios.post(`/api/devices/${id}/toggle`, {
+        userId: user?.id,
+      });
       setDevices((prev) => prev.map((d) => (d.id === id ? res.data : d)));
     } catch (err) {
       console.error(err);
@@ -38,9 +41,7 @@ export default function DevicesPage({ userId: propUserId }) {
       {!propUserId && (
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Thiết bị</h2>
-          <p className="text-slate-500 text-sm mt-1">
-            Quản lý tất cả thiết bị trong nhà
-          </p>
+          <p className="text-slate-500 text-sm mt-1">Quản lý tất cả thiết bị trong nhà</p>
         </div>
       )}
 
@@ -79,18 +80,12 @@ export default function DevicesPage({ userId: propUserId }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filtered.map((device) => (
-          <DeviceCard
-            key={device.id}
-            device={device}
-            onToggle={handleToggle}
-          />
+          <DeviceCard key={device.id} device={device} onToggle={handleToggle} />
         ))}
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-12 text-slate-400">
-          Không tìm thấy thiết bị phù hợp
-        </div>
+        <div className="text-center py-12 text-slate-400">Không tìm thấy thiết bị phù hợp</div>
       )}
     </div>
   );
