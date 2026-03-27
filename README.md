@@ -59,8 +59,12 @@ pip install -r requirements.txt
 # tải model OpenCV
 python tools/download_models.py
 
-# chạy server
+# Mở 2 Terminal chạy như bên dưới
+# Terminal backend1 - Chạy Face Recognition - Port 4000
 uvicorn main:app --reload --port 4000
+
+# Terminal backend2 - Chạy Data Service - Port 4001
+npm start
 ```
 
 #### Frontend (React + Vite)
