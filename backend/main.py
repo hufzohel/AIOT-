@@ -190,7 +190,7 @@ def toggle_device(device_id: int, payload: ToggleDeviceRequest):
 def users():
     users = []
     for user in store.data["users"]:
-        if user["role"] != "USER":
+        if user["role"] != "MEMBER":
             continue
         user_devices = [device for device in store.data["devices"] if device["userId"] == user["id"]]
         active_count = sum(1 for device in user_devices if device["status"])
@@ -326,4 +326,4 @@ def face_login(payload: FaceLoginRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=4000, reload=True)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, ChevronRight, Cpu, Power, ScanFace } from "lucide-react";
+import { User, ChevronRight, Cpu, Power } from "lucide-react";
 import axios from "axios";
 
 export default function UsersPage() {
@@ -16,7 +16,7 @@ export default function UsersPage() {
       <div>
         <h2 className="text-2xl font-bold text-slate-800">Người dùng</h2>
         <p className="text-slate-500 text-sm mt-1">
-          Chọn một người dùng để xem dashboard, thiết bị và trạng thái đăng ký khuôn mặt.
+          Chọn một MEMBER để xem dashboard, thiết bị được cấp và phân quyền.
         </p>
       </div>
 
@@ -31,39 +31,60 @@ export default function UsersPage() {
               <div className="w-12 h-12 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
                 <User className="w-6 h-6 text-primary-600" />
               </div>
+
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 truncate">{user.name}</p>
-                <p className="text-xs text-slate-500 truncate mt-0.5">{user.email}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold text-slate-800 truncate">
+                    {user.name}
+                  </p>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-medium bg-primary-100 text-primary-700">
+                    MEMBER
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-500 truncate mt-0.5">
+                  {user.email}
+                </p>
               </div>
+
               <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-primary-500 transition-colors shrink-0" />
             </div>
 
-            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-4">
+            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-slate-400" />
                 <span className="text-xs text-slate-600">
-                  <span className="font-semibold text-slate-800">{user.deviceCount}</span> thiết bị
+                  <span className="font-semibold text-slate-800">
+                    {user.deviceCount}
+                  </span>{" "}
+                  thiết bị
                 </span>
               </div>
+
               <div className="flex items-center gap-2">
                 <Power className="w-4 h-4 text-accent-500" />
                 <span className="text-xs text-slate-600">
-                  <span className="font-semibold text-accent-600">{user.activeDeviceCount}</span> đang bật
+                  <span className="font-semibold text-accent-600">
+                    {user.activeDeviceCount}
+                  </span>{" "}
+                  đang bật
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <ScanFace className={`w-4 h-4 ${user.faceAuth?.enabled ? "text-green-600" : "text-slate-400"}`} />
-                <span className="text-xs text-slate-600">
-                  {user.faceAuth?.enabled ? "Đã đăng ký face" : "Chưa đăng ký face"}
-                </span>
-              </div>
+            </div>
+
+            <div className="mt-4">
+              <span className="inline-flex items-center text-sm font-medium text-primary-600 group-hover:text-primary-700">
+                Xem chi tiết
+              </span>
             </div>
           </button>
         ))}
       </div>
 
       {users.length === 0 && (
-        <div className="text-center py-12 text-slate-400">Không có người dùng nào</div>
+        <div className="text-center py-12 text-slate-400">
+          Không có MEMBER nào
+        </div>
       )}
     </div>
   );

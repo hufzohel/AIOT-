@@ -5,7 +5,7 @@
       "email": "member1@smarthome.com",
       "password": "password123",
       "name": "Nguyễn Văn A",
-      "role": "USER",
+      "role": "MEMBER",
       "faceAuth": {
         "enabled": false,
         "sampleCount": 0,
@@ -35,7 +35,7 @@
       "email": "member2@smarthome.com",
       "password": "password456",
       "name": "Lê Minh C",
-      "role": "USER",
+      "role": "MEMBER",
       "faceAuth": {
         "enabled": false,
         "sampleCount": 0,
