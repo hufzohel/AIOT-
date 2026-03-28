@@ -29,7 +29,7 @@ backend/.venv/
 backend/__pycache__/
 backend/*.pyc
 backend/*.pyo
-backend/node_modules/
+backend/models
 
 # ========================
 # 🔹 MODELS (RẤT QUAN TRỌNG)

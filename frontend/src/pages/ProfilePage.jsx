@@ -1,313 +1,205 @@
-import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
-import {
-  Camera,
-  ScanFace,
-  ShieldCheck,
-  User,
-} from "lucide-react";
+import { useMemo, useState } from "react";
+import { Camera, CameraOff, CheckCircle2, RefreshCcw, Save, ScanFace, Trash2 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import { useCamera } from "../hooks/useCamera";
+import api from "../lib/api";
+import useCamera from "../hooks/useCamera";
+import Toast from "../components/Toast";
+
+const SAMPLE_TARGET = 5;
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
-  const { videoRef, cameraActive, cameraError, startCamera, stopCamera, captureFrame } = useCamera();
   const [samples, setSamples] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [health, setHealth] = useState({ ready: false, message: "Đang kiểm tra backend face..." });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState({ open: false, type: "info", message: "" });
+  const { videoRef, cameraActive, cameraLoading, cameraError, startCamera, stopCamera, captureFrame } = useCamera();
 
-  useEffect(() => {
-    axios
-      .get("/api/face/health")
-      .then((res) => setHealth(res.data))
-      .catch(() =>
-        setHealth({ ready: false, message: "Không thể kết nối backend face recognition" })
-      );
-  }, []);
+  const guideSteps = useMemo(
+    () => [
+      "Đăng nhập bằng mật khẩu lần đầu tiên.",
+      "Vào menu Hồ sơ và bật camera.",
+      "Chụp đủ 5 ảnh mẫu với góc mặt hơi khác nhau.",
+      "Lưu Face ID. Từ lần sau bạn có thể dùng tab Face ID ở màn hình đăng nhập.",
+    ],
+    []
+  );
 
-  const faceStatus = useMemo(() => user?.faceAuth || {}, [user]);
-  const needsNewEnrollment = !faceStatus?.enabled;
+  const showToast = (type, message) => {
+    setToast({ open: true, type, message });
+  };
 
-  const handleCaptureSample = () => {
+  const captureSample = () => {
     try {
-      setError("");
-      setMessage("");
-      if (samples.length >= 5) {
-        setError("Bạn đã đủ 5 ảnh mẫu. Hãy lưu hoặc đặt lại để chụp lại.");
+      if (!cameraActive) {
+        showToast("error", "Hãy bật camera trước khi chụp ảnh mẫu.");
+        return;
+      }
+      if (samples.length >= SAMPLE_TARGET) {
+        showToast("error", `Bạn đã chụp đủ ${SAMPLE_TARGET} ảnh mẫu.`);
         return;
       }
       const image = captureFrame();
       setSamples((prev) => [...prev, image]);
-    } catch (err) {
-      setError(err.message || "Không thể chụp ảnh mẫu");
+      showToast("success", `Đã chụp ${samples.length + 1}/${SAMPLE_TARGET} ảnh mẫu.`);
+    } catch (error) {
+      showToast("error", error.message || "Không thể chụp ảnh mẫu.");
     }
   };
 
-  const handleResetSamples = () => {
-    setSamples([]);
-    setMessage("");
-    setError("");
-  };
-
-  const handleRemoveLastSample = () => {
-    setSamples((prev) => prev.slice(0, -1));
-  };
-
-  const handleSubmitSamples = async () => {
-    if (samples.length !== 5) {
-      setError("Cần đúng 5 ảnh mẫu để đăng ký hoặc cập nhật khuôn mặt.");
+  const submitSamples = async () => {
+    if (samples.length !== SAMPLE_TARGET) {
+      showToast("error", `Cần đúng ${SAMPLE_TARGET} ảnh mẫu để lưu Face ID.`);
       return;
     }
 
-    setSubmitting(true);
-    setError("");
-    setMessage("");
-
+    setSaving(true);
     try {
-      const endpoint = needsNewEnrollment ? "/api/face/register" : "/api/face/update";
-      const { data } = await axios.post(endpoint, {
-        userId: user.id,
-        images: samples,
-      });
-      updateUser(data.user);
-      setMessage(data.message || "Đã lưu dữ liệu khuôn mặt thành công");
+      const endpoint = user?.faceAuthEnabled ? "/face/update" : "/face/register";
+      const res = await api.post(endpoint, { userId: user.id, images: samples });
+      updateUser(res.data.user);
       setSamples([]);
-    } catch (err) {
-      setError(err.response?.data?.message || "Không thể lưu dữ liệu khuôn mặt");
+      stopCamera();
+      showToast("success", res.data.message || "Đã lưu Face ID thành công.");
+    } catch (error) {
+      showToast("error", error.response?.data?.detail || "Không thể lưu Face ID.");
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   };
 
-  const handleDisableFaceLogin = async () => {
-    setSubmitting(true);
-    setError("");
-    setMessage("");
+  const disableFaceId = async () => {
+    setSaving(true);
     try {
-      const { data } = await axios.post("/api/face/disable", { userId: user.id });
-      updateUser(data.user);
+      const res = await api.post("/face/disable", { userId: user.id });
+      updateUser(res.data.user);
       setSamples([]);
-      setMessage(data.message || "Đã tắt đăng nhập bằng khuôn mặt");
-    } catch (err) {
-      setError(err.response?.data?.message || "Không thể tắt đăng nhập bằng khuôn mặt");
+      stopCamera();
+      showToast("success", res.data.message || "Đã tắt Face ID.");
+    } catch (error) {
+      showToast("error", error.response?.data?.detail || "Không thể tắt Face ID.");
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   };
 
   return (
     <div className="space-y-6">
+      <Toast open={toast.open} type={toast.type} message={toast.message} onClose={() => setToast((prev) => ({ ...prev, open: false }))} />
+
       <div>
         <h2 className="text-2xl font-bold text-slate-800">Hồ sơ người dùng</h2>
-        <p className="text-slate-500 text-sm mt-1">
-          Đăng ký hoặc cập nhật 5 ảnh mẫu để bật đăng nhập bằng xác thực gương mặt.
-        </p>
+        <p className="text-slate-500 text-sm mt-1">Face ID là tùy chọn. Bạn luôn có thể tiếp tục đăng nhập bằng mật khẩu.</p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
-          <div className="flex items-start justify-between gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <ScanFace className="w-5 h-5 text-primary-600" />
-                Face Enrollment
-              </h3>
-              <p className="text-sm text-slate-500 mt-1">
-                Quy trình: bật camera → chụp đủ 5 ảnh → backend OpenCV trích xuất embedding → lưu template.
-              </p>
+              <p className="text-base font-semibold text-slate-800">Thông tin tài khoản</p>
+              <p className="text-sm text-slate-500 mt-1">{user?.name} · {user?.email}</p>
             </div>
-            <span
-              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${faceStatus?.enabled
-                ? "bg-green-100 text-green-700"
-                : "bg-slate-100 text-slate-600"
-                }`}
-            >
-              <ShieldCheck className="w-4 h-4" />
-              {faceStatus?.enabled ? "Face login đã bật" : "Chưa đăng ký face"}
-            </span>
+            <div className={`rounded-full px-3 py-1 text-xs font-medium ${user?.faceAuthEnabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+              {user?.faceAuthEnabled ? "Face ID: Enabled" : "Face ID: Disabled"}
+            </div>
           </div>
 
-          <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 aspect-video relative">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-
+          <div className="aspect-video rounded-2xl overflow-hidden bg-slate-900 relative">
+            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
             {!cameraActive && (
-              <div className="absolute inset-0 flex items-center justify-center text-center text-slate-300 px-6">
-                <div>
-                  <Camera className="w-10 h-10 mx-auto mb-3 text-slate-400" />
-                  <p className="text-sm">
-                    Bật camera để xem preview trực tiếp và chụp 5 ảnh mẫu.
-                  </p>
-                </div>
+              <div className="absolute inset-0 flex items-center justify-center text-slate-300 text-sm px-6 text-center">
+                Bật camera để xem preview trực tiếp và chụp ảnh mẫu.
               </div>
             )}
           </div>
+
+          {cameraError && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{cameraError}</div>
+          )}
 
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={startCamera}
-              className="px-4 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors"
+              disabled={cameraLoading}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
             >
-              Bật camera
+              <Camera className="w-4 h-4" />
+              {cameraLoading ? "Đang bật camera..." : cameraActive ? "Mở lại camera" : "Bật camera"}
             </button>
             <button
               type="button"
               onClick={stopCamera}
-              className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200 transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
+              <CameraOff className="w-4 h-4" />
               Tắt camera
             </button>
             <button
               type="button"
-              onClick={handleCaptureSample}
-              disabled={!cameraActive || samples.length >= 5}
-              className="px-4 py-2.5 rounded-xl bg-accent-500 text-white text-sm font-medium hover:bg-accent-600 transition-colors disabled:opacity-50"
+              onClick={captureSample}
+              disabled={!cameraActive || samples.length >= SAMPLE_TARGET}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
             >
-              Chụp ảnh mẫu ({samples.length}/5)
+              <ScanFace className="w-4 h-4" />
+              Chụp mẫu ({samples.length}/{SAMPLE_TARGET})
             </button>
             <button
               type="button"
-              onClick={handleRemoveLastSample}
-              disabled={samples.length === 0}
-              className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+              onClick={submitSamples}
+              disabled={saving || samples.length !== SAMPLE_TARGET}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
-              Xóa ảnh cuối
+              <Save className="w-4 h-4" />
+              {saving ? "Đang lưu..." : user?.faceAuthEnabled ? "Cập nhật Face ID" : "Đăng ký Face ID"}
             </button>
             <button
               type="button"
-              onClick={handleResetSamples}
-              disabled={samples.length === 0}
-              className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+              onClick={() => setSamples([])}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Đặt lại 5 ảnh
+              <RefreshCcw className="w-4 h-4" />
+              Xóa mẫu tạm
             </button>
+            {user?.faceAuthEnabled && (
+              <button
+                type="button"
+                onClick={disableFaceId}
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                Tắt Face ID
+              </button>
+            )}
           </div>
 
-          {cameraError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {cameraError}
-            </div>
-          )}
-
-          {!health.ready && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              {health.message}
-            </div>
-          )}
-
-          {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-          {message && (
-            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-              {message}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            {Array.from({ length: 5 }).map((_, index) => {
-              const sample = samples[index];
-              return (
-                <div
-                  key={index}
-                  className={`aspect-square rounded-2xl overflow-hidden border ${sample ? "border-primary-200 bg-primary-50" : "border-dashed border-slate-200 bg-slate-50"
-                    }`}
-                >
-                  {sample ? (
-                    <img src={sample} alt={`Mẫu ${index + 1}`} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                      Ảnh {index + 1}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex flex-wrap gap-3 pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={handleSubmitSamples}
-              disabled={submitting || samples.length !== 5 || !health.ready}
-              className="px-5 py-3 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors disabled:opacity-50"
-            >
-              {submitting
-                ? "Đang xử lý..."
-                : needsNewEnrollment
-                  ? "Lưu đăng ký khuôn mặt"
-                  : "Cập nhật dữ liệu khuôn mặt"}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDisableFaceLogin}
-              disabled={submitting || !faceStatus?.enabled}
-              className="px-5 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
-            >
-              Tắt Face Login
-            </button>
+          <div className="grid grid-cols-5 gap-2">
+            {Array.from({ length: SAMPLE_TARGET }).map((_, index) => (
+              <div key={index} className={`rounded-xl px-3 py-3 text-center text-xs font-medium border ${samples[index] ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-slate-50 border-slate-200 text-slate-400"}`}>
+                {samples[index] ? <CheckCircle2 className="w-4 h-4 mx-auto mb-1" /> : null}
+                Mẫu {index + 1}
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-primary-100 flex items-center justify-center">
-                <User className="w-7 h-7 text-primary-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800">{user?.name}</h3>
-                <p className="text-sm text-slate-500">{user?.email}</p>
-                <p className="text-xs text-slate-400 mt-1">Vai trò: {user?.role}</p>
-              </div>
-            </div>
-          </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <h3 className="text-base font-semibold text-slate-800">Hướng dẫn đăng ký Face ID</h3>
+          <ol className="mt-4 space-y-3">
+            {guideSteps.map((step, index) => (
+              <li key={step} className="flex gap-3 text-sm text-slate-600">
+                <span className="w-6 h-6 rounded-full bg-primary-100 text-primary-700 font-semibold text-xs flex items-center justify-center shrink-0">{index + 1}</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-slate-800">Trạng thái đăng ký</h3>
-            <div className="grid grid-cols-1 gap-3">
-              <div className="rounded-xl bg-slate-50 px-4 py-3">
-                <p className="text-xs text-slate-500">Đăng nhập gương mặt</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">
-                  {faceStatus?.enabled ? "Đã bật" : "Chưa bật"}
-                </p>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-4 py-3">
-                <p className="text-xs text-slate-500">Số ảnh mẫu đã lưu</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">{faceStatus?.sampleCount || 0} / 5</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-4 py-3">
-                <p className="text-xs text-slate-500">Lần cập nhật gần nhất</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">
-                  {faceStatus?.updatedAt
-                    ? new Date(faceStatus.updatedAt).toLocaleString("vi-VN")
-                    : "Chưa có"}
-                </p>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-4 py-3">
-                <p className="text-xs text-slate-500">Ngưỡng so khớp</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">{faceStatus?.threshold || 0.42}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-3">
-            <h3 className="text-lg font-semibold text-slate-800">Lưu ý vận hành</h3>
-            <ul className="space-y-2 text-sm text-slate-600 list-disc pl-5">
-              <li>Đăng ký bằng đúng 5 ảnh khác góc nhìn nhẹ để template ổn định hơn.</li>
-              <li>Trong lúc chụp, giữ mặt đủ sáng và chỉ xuất hiện một khuôn mặt trong khung hình.</li>
-              <li>Frontend chỉ preview/chụp ảnh; toàn bộ detection + verification chạy trên backend OpenCV.</li>
+          <div className="mt-6 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600">
+            <p className="font-medium text-slate-800 mb-2">Mẹo để đăng ký tốt hơn</p>
+            <ul className="space-y-2 list-disc pl-5">
+              <li>Ngồi ở nơi đủ sáng, tránh ngược sáng.</li>
+              <li>Nhìn thẳng vào camera và thay đổi góc mặt nhẹ giữa các lần chụp.</li>
+              <li>Đảm bảo trong khung hình chỉ có đúng một khuôn mặt.</li>
             </ul>
           </div>
         </div>

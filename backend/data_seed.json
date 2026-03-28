@@ -6,13 +6,22 @@
       "password": "password123",
       "name": "Nguyễn Văn A",
       "role": "MEMBER",
+      "permissions": {
+        "deviceTypes": [
+          "light",
+          "fan"
+        ],
+        "deviceIds": [
+          6
+        ]
+      },
       "faceAuth": {
         "enabled": false,
         "sampleCount": 0,
         "registeredAt": null,
+        "updatedAt": null,
         "threshold": 0.42,
-        "embedding": [],
-        "updatedAt": null
+        "embedding": []
       }
     },
     {
@@ -21,13 +30,17 @@
       "password": "admin123",
       "name": "Trần Thị B",
       "role": "ADMIN",
+      "permissions": {
+        "deviceTypes": [],
+        "deviceIds": []
+      },
       "faceAuth": {
         "enabled": false,
         "sampleCount": 0,
         "registeredAt": null,
+        "updatedAt": null,
         "threshold": 0.42,
-        "embedding": [],
-        "updatedAt": null
+        "embedding": []
       }
     },
     {
@@ -36,781 +49,300 @@
       "password": "password456",
       "name": "Lê Minh C",
       "role": "MEMBER",
+      "permissions": {
+        "deviceTypes": [
+          "ac"
+        ],
+        "deviceIds": [
+          2,
+          9
+        ]
+      },
       "faceAuth": {
         "enabled": false,
         "sampleCount": 0,
         "registeredAt": null,
+        "updatedAt": null,
         "threshold": 0.42,
-        "embedding": [],
-        "updatedAt": null
+        "embedding": []
       }
+    }
+  ],
+  "devices": [
+    {
+      "id": 1,
+      "name": "Đèn phòng khách",
+      "type": "light",
+      "room": "Phòng khách",
+      "online": true,
+      "power": true,
+      "value": 80
+    },
+    {
+      "id": 2,
+      "name": "Đèn phòng ngủ",
+      "type": "light",
+      "room": "Phòng ngủ",
+      "online": true,
+      "power": false,
+      "value": 0
+    },
+    {
+      "id": 3,
+      "name": "Đèn nhà bếp",
+      "type": "light",
+      "room": "Nhà bếp",
+      "online": true,
+      "power": true,
+      "value": 100
+    },
+    {
+      "id": 4,
+      "name": "Quạt phòng khách",
+      "type": "fan",
+      "room": "Phòng khách",
+      "online": true,
+      "power": true,
+      "value": 3
+    },
+    {
+      "id": 5,
+      "name": "Quạt phòng ngủ",
+      "type": "fan",
+      "room": "Phòng ngủ",
+      "online": false,
+      "power": false,
+      "value": 0
+    },
+    {
+      "id": 6,
+      "name": "Điều hòa phòng khách",
+      "type": "ac",
+      "room": "Phòng khách",
+      "online": true,
+      "power": true,
+      "value": 24
+    },
+    {
+      "id": 7,
+      "name": "Điều hòa phòng ngủ",
+      "type": "ac",
+      "room": "Phòng ngủ",
+      "online": true,
+      "power": false,
+      "value": 0
+    },
+    {
+      "id": 8,
+      "name": "Đèn ban công",
+      "type": "light",
+      "room": "Ban công",
+      "online": false,
+      "power": false,
+      "value": 0
+    },
+    {
+      "id": 9,
+      "name": "Điều hòa phòng làm việc",
+      "type": "ac",
+      "room": "Phòng làm việc",
+      "online": true,
+      "power": true,
+      "value": 23
+    },
+    {
+      "id": 10,
+      "name": "Quạt phòng làm việc",
+      "type": "fan",
+      "room": "Phòng làm việc",
+      "online": true,
+      "power": false,
+      "value": 0
     }
   ],
   "sensors": {
     "1": {
       "temperature": [
         {
-          "time": "00:00",
-          "value": 26.2
-        },
-        {
-          "time": "01:00",
-          "value": 25.8
-        },
-        {
-          "time": "02:00",
-          "value": 25.5
-        },
-        {
-          "time": "03:00",
+          "time": "06:00",
           "value": 25.1
         },
         {
-          "time": "04:00",
-          "value": 24.9
-        },
-        {
-          "time": "05:00",
-          "value": 25.0
-        },
-        {
-          "time": "06:00",
-          "value": 25.6
-        },
-        {
-          "time": "07:00",
-          "value": 26.3
-        },
-        {
-          "time": "08:00",
-          "value": 27.1
-        },
-        {
           "time": "09:00",
-          "value": 28.0
-        },
-        {
-          "time": "10:00",
-          "value": 29.2
-        },
-        {
-          "time": "11:00",
-          "value": 30.1
+          "value": 28.4
         },
         {
           "time": "12:00",
-          "value": 31.5
-        },
-        {
-          "time": "13:00",
-          "value": 32.0
-        },
-        {
-          "time": "14:00",
-          "value": 31.8
+          "value": 31.2
         },
         {
           "time": "15:00",
-          "value": 31.0
-        },
-        {
-          "time": "16:00",
-          "value": 30.2
-        },
-        {
-          "time": "17:00",
-          "value": 29.5
+          "value": 30.0
         },
         {
           "time": "18:00",
-          "value": 28.8
-        },
-        {
-          "time": "19:00",
-          "value": 28.0
-        },
-        {
-          "time": "20:00",
-          "value": 27.5
+          "value": 28.1
         },
         {
           "time": "21:00",
-          "value": 27.0
-        },
-        {
-          "time": "22:00",
-          "value": 26.7
-        },
-        {
-          "time": "23:00",
           "value": 26.4
         }
       ],
       "humidity": [
         {
-          "time": "00:00",
-          "value": 72
-        },
-        {
-          "time": "01:00",
-          "value": 74
-        },
-        {
-          "time": "02:00",
-          "value": 75
-        },
-        {
-          "time": "03:00",
-          "value": 76
-        },
-        {
-          "time": "04:00",
-          "value": 77
-        },
-        {
-          "time": "05:00",
-          "value": 76
-        },
-        {
           "time": "06:00",
           "value": 74
         },
         {
-          "time": "07:00",
-          "value": 71
-        },
-        {
-          "time": "08:00",
-          "value": 68
-        },
-        {
           "time": "09:00",
-          "value": 65
-        },
-        {
-          "time": "10:00",
-          "value": 60
-        },
-        {
-          "time": "11:00",
-          "value": 56
+          "value": 66
         },
         {
           "time": "12:00",
-          "value": 52
-        },
-        {
-          "time": "13:00",
-          "value": 50
-        },
-        {
-          "time": "14:00",
-          "value": 51
-        },
-        {
-          "time": "15:00",
-          "value": 54
-        },
-        {
-          "time": "16:00",
           "value": 57
         },
         {
-          "time": "17:00",
+          "time": "15:00",
           "value": 60
         },
         {
           "time": "18:00",
-          "value": 63
-        },
-        {
-          "time": "19:00",
-          "value": 66
-        },
-        {
-          "time": "20:00",
-          "value": 68
+          "value": 65
         },
         {
           "time": "21:00",
           "value": 70
-        },
-        {
-          "time": "22:00",
-          "value": 71
-        },
-        {
-          "time": "23:00",
-          "value": 72
         }
       ],
       "light": [
         {
-          "time": "00:00",
-          "value": 0
-        },
-        {
-          "time": "01:00",
-          "value": 0
-        },
-        {
-          "time": "02:00",
-          "value": 0
-        },
-        {
-          "time": "03:00",
-          "value": 0
-        },
-        {
-          "time": "04:00",
-          "value": 5
-        },
-        {
-          "time": "05:00",
-          "value": 50
-        },
-        {
           "time": "06:00",
-          "value": 200
-        },
-        {
-          "time": "07:00",
-          "value": 450
-        },
-        {
-          "time": "08:00",
-          "value": 620
+          "value": 120
         },
         {
           "time": "09:00",
-          "value": 780
-        },
-        {
-          "time": "10:00",
-          "value": 890
-        },
-        {
-          "time": "11:00",
-          "value": 950
+          "value": 560
         },
         {
           "time": "12:00",
-          "value": 1000
-        },
-        {
-          "time": "13:00",
-          "value": 980
-        },
-        {
-          "time": "14:00",
-          "value": 920
+          "value": 780
         },
         {
           "time": "15:00",
-          "value": 830
-        },
-        {
-          "time": "16:00",
-          "value": 700
-        },
-        {
-          "time": "17:00",
-          "value": 500
+          "value": 630
         },
         {
           "time": "18:00",
-          "value": 250
-        },
-        {
-          "time": "19:00",
-          "value": 80
-        },
-        {
-          "time": "20:00",
-          "value": 10
+          "value": 280
         },
         {
           "time": "21:00",
-          "value": 0
-        },
-        {
-          "time": "22:00",
-          "value": 0
-        },
-        {
-          "time": "23:00",
-          "value": 0
+          "value": 90
         }
       ]
     },
     "3": {
       "temperature": [
         {
-          "time": "00:00",
-          "value": 24.5
-        },
-        {
-          "time": "01:00",
-          "value": 24.2
-        },
-        {
-          "time": "02:00",
-          "value": 24.0
-        },
-        {
-          "time": "03:00",
-          "value": 23.8
-        },
-        {
-          "time": "04:00",
-          "value": 23.5
-        },
-        {
-          "time": "05:00",
-          "value": 23.7
-        },
-        {
           "time": "06:00",
-          "value": 24.2
-        },
-        {
-          "time": "07:00",
-          "value": 25.0
-        },
-        {
-          "time": "08:00",
-          "value": 25.8
+          "value": 24.7
         },
         {
           "time": "09:00",
-          "value": 26.5
-        },
-        {
-          "time": "10:00",
-          "value": 27.3
-        },
-        {
-          "time": "11:00",
-          "value": 28.0
+          "value": 27.6
         },
         {
           "time": "12:00",
-          "value": 28.8
-        },
-        {
-          "time": "13:00",
-          "value": 29.2
-        },
-        {
-          "time": "14:00",
-          "value": 29.0
+          "value": 30.4
         },
         {
           "time": "15:00",
-          "value": 28.5
-        },
-        {
-          "time": "16:00",
-          "value": 27.8
-        },
-        {
-          "time": "17:00",
-          "value": 27.0
+          "value": 29.3
         },
         {
           "time": "18:00",
-          "value": 26.4
-        },
-        {
-          "time": "19:00",
-          "value": 25.8
-        },
-        {
-          "time": "20:00",
-          "value": 25.3
+          "value": 27.4
         },
         {
           "time": "21:00",
-          "value": 25.0
-        },
-        {
-          "time": "22:00",
-          "value": 24.8
-        },
-        {
-          "time": "23:00",
-          "value": 24.6
+          "value": 25.9
         }
       ],
       "humidity": [
         {
-          "time": "00:00",
-          "value": 68
-        },
-        {
-          "time": "01:00",
-          "value": 70
-        },
-        {
-          "time": "02:00",
-          "value": 71
-        },
-        {
-          "time": "03:00",
-          "value": 72
-        },
-        {
-          "time": "04:00",
-          "value": 73
-        },
-        {
-          "time": "05:00",
-          "value": 72
-        },
-        {
           "time": "06:00",
-          "value": 70
-        },
-        {
-          "time": "07:00",
-          "value": 67
-        },
-        {
-          "time": "08:00",
-          "value": 64
+          "value": 76
         },
         {
           "time": "09:00",
-          "value": 61
-        },
-        {
-          "time": "10:00",
-          "value": 58
-        },
-        {
-          "time": "11:00",
-          "value": 55
+          "value": 68
         },
         {
           "time": "12:00",
-          "value": 52
-        },
-        {
-          "time": "13:00",
-          "value": 50
-        },
-        {
-          "time": "14:00",
-          "value": 51
+          "value": 60
         },
         {
           "time": "15:00",
-          "value": 53
-        },
-        {
-          "time": "16:00",
-          "value": 56
-        },
-        {
-          "time": "17:00",
-          "value": 59
-        },
-        {
-          "time": "18:00",
           "value": 62
         },
         {
-          "time": "19:00",
-          "value": 64
-        },
-        {
-          "time": "20:00",
-          "value": 66
-        },
-        {
-          "time": "21:00",
+          "time": "18:00",
           "value": 67
         },
         {
-          "time": "22:00",
-          "value": 68
-        },
-        {
-          "time": "23:00",
-          "value": 68
+          "time": "21:00",
+          "value": 72
         }
       ],
       "light": [
         {
-          "time": "00:00",
-          "value": 0
-        },
-        {
-          "time": "01:00",
-          "value": 0
-        },
-        {
-          "time": "02:00",
-          "value": 0
-        },
-        {
-          "time": "03:00",
-          "value": 0
-        },
-        {
-          "time": "04:00",
-          "value": 3
-        },
-        {
-          "time": "05:00",
-          "value": 40
-        },
-        {
           "time": "06:00",
-          "value": 180
-        },
-        {
-          "time": "07:00",
-          "value": 400
-        },
-        {
-          "time": "08:00",
-          "value": 580
+          "value": 110
         },
         {
           "time": "09:00",
-          "value": 720
-        },
-        {
-          "time": "10:00",
-          "value": 840
-        },
-        {
-          "time": "11:00",
-          "value": 910
+          "value": 520
         },
         {
           "time": "12:00",
-          "value": 960
-        },
-        {
-          "time": "13:00",
-          "value": 940
-        },
-        {
-          "time": "14:00",
-          "value": 880
+          "value": 760
         },
         {
           "time": "15:00",
-          "value": 790
-        },
-        {
-          "time": "16:00",
-          "value": 650
-        },
-        {
-          "time": "17:00",
-          "value": 460
+          "value": 610
         },
         {
           "time": "18:00",
-          "value": 220
-        },
-        {
-          "time": "19:00",
-          "value": 60
-        },
-        {
-          "time": "20:00",
-          "value": 5
+          "value": 260
         },
         {
           "time": "21:00",
-          "value": 0
-        },
-        {
-          "time": "22:00",
-          "value": 0
-        },
-        {
-          "time": "23:00",
-          "value": 0
+          "value": 80
         }
       ]
     }
   },
-  "devices": [
-    {
-      "id": 1,
-      "userId": 1,
-      "name": "Đèn phòng khách",
-      "type": "light",
-      "room": "Phòng khách",
-      "status": true,
-      "value": 80
-    },
-    {
-      "id": 2,
-      "userId": 1,
-      "name": "Đèn phòng ngủ",
-      "type": "light",
-      "room": "Phòng ngủ",
-      "status": false,
-      "value": 0
-    },
-    {
-      "id": 3,
-      "userId": 1,
-      "name": "Đèn nhà bếp",
-      "type": "light",
-      "room": "Nhà bếp",
-      "status": true,
-      "value": 100
-    },
-    {
-      "id": 4,
-      "userId": 1,
-      "name": "Quạt phòng khách",
-      "type": "fan",
-      "room": "Phòng khách",
-      "status": true,
-      "value": 3
-    },
-    {
-      "id": 5,
-      "userId": 1,
-      "name": "Quạt phòng ngủ",
-      "type": "fan",
-      "room": "Phòng ngủ",
-      "status": false,
-      "value": 0
-    },
-    {
-      "id": 6,
-      "userId": 1,
-      "name": "Điều hòa phòng khách",
-      "type": "ac",
-      "room": "Phòng khách",
-      "status": true,
-      "value": 24
-    },
-    {
-      "id": 7,
-      "userId": 1,
-      "name": "Điều hòa phòng ngủ",
-      "type": "ac",
-      "room": "Phòng ngủ",
-      "status": false,
-      "value": 26
-    },
-    {
-      "id": 8,
-      "userId": 3,
-      "name": "Đèn phòng khách",
-      "type": "light",
-      "room": "Phòng khách",
-      "status": true,
-      "value": 70
-    },
-    {
-      "id": 9,
-      "userId": 3,
-      "name": "Đèn phòng ngủ",
-      "type": "light",
-      "room": "Phòng ngủ",
-      "status": true,
-      "value": 60
-    },
-    {
-      "id": 10,
-      "userId": 3,
-      "name": "Quạt trần",
-      "type": "fan",
-      "room": "Phòng khách",
-      "status": false,
-      "value": 0
-    },
-    {
-      "id": 11,
-      "userId": 3,
-      "name": "Điều hòa phòng khách",
-      "type": "ac",
-      "room": "Phòng khách",
-      "status": true,
-      "value": 22
-    }
-  ],
   "systemLogs": [
     {
       "id": 1,
-      "timestamp": "2026-03-24T10:30:00Z",
-      "user": "Nguyễn Văn A",
-      "action": "Bật đèn phòng khách",
+      "timestamp": "2026-03-27T08:30:00Z",
+      "user": "Trần Thị B",
+      "action": "Đăng nhập bằng mật khẩu",
       "level": "info"
     },
     {
       "id": 2,
-      "timestamp": "2026-03-24T10:25:00Z",
-      "user": "Lê Minh C",
-      "action": "Điều chỉnh điều hòa: 22°C",
+      "timestamp": "2026-03-27T08:20:00Z",
+      "user": "Nguyễn Văn A",
+      "action": "Bật Đèn phòng khách",
       "level": "info"
     },
     {
       "id": 3,
-      "timestamp": "2026-03-24T10:20:00Z",
-      "user": "Nguyễn Văn A",
-      "action": "Điều chỉnh điều hòa phòng khách: 24°C",
-      "level": "info"
-    },
-    {
-      "id": 4,
-      "timestamp": "2026-03-24T10:15:00Z",
-      "user": "System",
-      "action": "Cảnh báo: Nhiệt độ vượt 32°C",
-      "level": "warning"
-    },
-    {
-      "id": 5,
-      "timestamp": "2026-03-24T10:10:00Z",
+      "timestamp": "2026-03-27T08:15:00Z",
       "user": "Lê Minh C",
-      "action": "Bật đèn phòng ngủ",
-      "level": "info"
-    },
-    {
-      "id": 6,
-      "timestamp": "2026-03-24T10:05:00Z",
-      "user": "System",
-      "action": "Kết nối thiết bị mới thành công",
+      "action": "Bật Điều hòa phòng làm việc",
       "level": "success"
-    },
-    {
-      "id": 7,
-      "timestamp": "2026-03-24T10:00:00Z",
-      "user": "Nguyễn Văn A",
-      "action": "Đăng nhập hệ thống",
-      "level": "info"
-    },
-    {
-      "id": 8,
-      "timestamp": "2026-03-24T09:55:00Z",
-      "user": "System",
-      "action": "Lỗi kết nối cảm biến ánh sáng",
-      "level": "error"
-    },
-    {
-      "id": 9,
-      "timestamp": "2026-03-24T09:50:00Z",
-      "user": "Lê Minh C",
-      "action": "Đăng nhập hệ thống",
-      "level": "info"
-    },
-    {
-      "id": 10,
-      "timestamp": "2026-03-24T09:45:00Z",
-      "user": "System",
-      "action": "Tắt quạt trần tự động (hẹn giờ)",
-      "level": "info"
     }
   ]
 }

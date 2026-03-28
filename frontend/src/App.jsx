@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Layout from "./components/Layout";
 import LoginPage from "./pages/LoginPage";
@@ -8,6 +8,13 @@ import UsersPage from "./pages/UsersPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import LogsPage from "./pages/LogsPage";
 import ProfilePage from "./pages/ProfilePage";
+
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
 
 function AdminRoute({ children }) {
   const { user, loading } = useAuth();
@@ -25,26 +32,12 @@ function MemberRoute({ children }) {
   return children;
 }
 
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
-  return children;
-}
-
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-
   if (user) {
-    return (
-      <Navigate
-        to={user.role === "ADMIN" ? "/users" : "/dashboard"}
-        replace
-      />
-    );
+    return <Navigate to={user.role === "ADMIN" ? "/users" : "/dashboard"} replace />;
   }
-
   return children;
 }
 
@@ -52,8 +45,7 @@ function DefaultRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === "ADMIN") return <Navigate to="/users" replace />;
-  return <Navigate to="/dashboard" replace />;
+  return <Navigate to={user.role === "ADMIN" ? "/users" : "/dashboard"} replace />;
 }
 
 export default function App() {
@@ -79,7 +71,6 @@ export default function App() {
             }
           >
             <Route index element={<DefaultRedirect />} />
-
             <Route
               path="dashboard"
               element={
@@ -88,7 +79,6 @@ export default function App() {
                 </MemberRoute>
               }
             />
-
             <Route
               path="devices"
               element={
@@ -97,7 +87,6 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-
             <Route
               path="profile"
               element={
@@ -106,7 +95,6 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-
             <Route
               path="users"
               element={
@@ -115,7 +103,6 @@ export default function App() {
                 </AdminRoute>
               }
             />
-
             <Route
               path="users/:id"
               element={
@@ -124,7 +111,6 @@ export default function App() {
                 </AdminRoute>
               }
             />
-
             <Route
               path="logs"
               element={

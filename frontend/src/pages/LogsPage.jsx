@@ -1,52 +1,34 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react";
-import axios from "axios";
+import { AlertCircle, AlertTriangle, CheckCircle, Info } from "lucide-react";
+import api from "../lib/api";
 
 const levelConfig = {
-  info: {
-    icon: Info,
-    text: "text-primary-600",
-    badge: "bg-primary-100 text-primary-700",
-  },
-  warning: {
-    icon: AlertTriangle,
-    text: "text-amber-600",
-    badge: "bg-amber-100 text-amber-700",
-  },
-  error: {
-    icon: AlertCircle,
-    text: "text-red-600",
-    badge: "bg-red-100 text-red-700",
-  },
-  success: {
-    icon: CheckCircle,
-    text: "text-green-600",
-    badge: "bg-green-100 text-green-700",
-  },
+  info: { icon: Info, badge: "bg-primary-100 text-primary-700", text: "text-primary-600" },
+  warning: { icon: AlertTriangle, badge: "bg-amber-100 text-amber-700", text: "text-amber-600" },
+  error: { icon: AlertCircle, badge: "bg-red-100 text-red-700", text: "text-red-600" },
+  success: { icon: CheckCircle, badge: "bg-emerald-100 text-emerald-700", text: "text-emerald-600" },
 };
 
 export default function LogsPage() {
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
-    axios.get("/api/logs").then((res) => setLogs(res.data));
+    api.get("/logs").then((res) => setLogs(res.data));
   }, []);
 
-  const formatTime = (ts) =>
-    new Date(ts).toLocaleString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+  const formatTime = (value) => new Date(value).toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-slate-800">Nhật ký hệ thống</h2>
-        <p className="text-slate-500 text-sm mt-1">Theo dõi các hoạt động gần đây trong hệ thống</p>
+        <p className="text-slate-500 text-sm mt-1">Theo dõi các hoạt động gần đây trong hệ thống.</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -74,9 +56,7 @@ export default function LogsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium ${config.badge}`}>
-                      {log.level.toUpperCase()}
-                    </span>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium ${config.badge}`}>{log.level.toUpperCase()}</span>
                   </td>
                 </tr>
               );

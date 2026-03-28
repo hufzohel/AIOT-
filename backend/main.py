@@ -1,26 +1,70 @@
 from __future__ import annotations
 
 import json
-import secrets
+import shutil
+import threading
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import RLock
-from typing import Any
+from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from face_engine import FaceEngineError, OpenCVFaceEngine
+from face_engine import FaceEngine, FaceEngineError
 
 BASE_DIR = Path(__file__).resolve().parent
-STORE_PATH = BASE_DIR / "data_store.json"
 SEED_PATH = BASE_DIR / "data_seed.json"
-MODELS_DIR = BASE_DIR / "models"
+STORE_PATH = BASE_DIR / "data_store.json"
+MODEL_DIR = BASE_DIR / "models"
 
-app = FastAPI(title="AIoT Smart Home API", version="2.0.0")
+
+class JsonStore:
+    def __init__(self, seed_path: Path, store_path: Path):
+        self.seed_path = seed_path
+        self.store_path = store_path
+        self.lock = threading.Lock()
+        self.ensure_store()
+
+    def ensure_store(self) -> None:
+        if not self.store_path.exists():
+            shutil.copy(self.seed_path, self.store_path)
+
+    def load(self) -> Dict[str, Any]:
+        with self.lock:
+            self.ensure_store()
+            return json.loads(self.store_path.read_text(encoding="utf-8"))
+
+    def save(self, payload: Dict[str, Any]) -> None:
+        with self.lock:
+            tmp_path = self.store_path.with_suffix(".tmp")
+            tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp_path.replace(self.store_path)
+
+
+store = JsonStore(SEED_PATH, STORE_PATH)
+
+
+_engine: Optional[FaceEngine] = None
+_engine_error: Optional[str] = None
+
+
+def get_face_engine() -> FaceEngine:
+    global _engine, _engine_error
+    if _engine is not None:
+        return _engine
+    try:
+        _engine = FaceEngine(MODEL_DIR)
+        _engine_error = None
+        return _engine
+    except FaceEngineError as exc:
+        _engine_error = str(exc)
+        raise
+
+
+app = FastAPI(title="AIoT Smart Home Unified Backend", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,295 +79,373 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class ToggleDeviceRequest(BaseModel):
-    userId: int | None = None
+class ToggleRequest(BaseModel):
+    actorId: Optional[int] = None
 
 
-class FaceImagesRequest(BaseModel):
+class BulkPowerRequest(BaseModel):
+    actorId: Optional[int] = None
+    power: bool
+
+
+class PermissionRequest(BaseModel):
+    actorId: Optional[int] = None
+    deviceTypes: List[str] = Field(default_factory=list)
+    deviceIds: List[int] = Field(default_factory=list)
+
+
+class FaceRegisterRequest(BaseModel):
     userId: int
-    images: list[str] = Field(default_factory=list)
-
-
-class FaceLoginRequest(BaseModel):
-    image: str
+    images: List[str] = Field(default_factory=list, min_length=1)
 
 
 class FaceDisableRequest(BaseModel):
     userId: int
 
 
-class DataStore:
-    def __init__(self, store_path: Path, seed_path: Path):
-        self.store_path = store_path
-        self.seed_path = seed_path
-        self.lock = RLock()
-        self.data = self._load_initial_data()
+class FaceLoginRequest(BaseModel):
+    image: str
 
-    def _load_initial_data(self) -> dict[str, Any]:
-        source = self.store_path if self.store_path.exists() else self.seed_path
-        with source.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-        if not self.store_path.exists():
-            self._persist(data)
-        return data
 
-    def _persist(self, data: dict[str, Any] | None = None) -> None:
-        payload = data if data is not None else self.data
-        with self.store_path.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
-    def save(self) -> None:
-        with self.lock:
-            self._persist()
 
-    def get_user_by_id(self, user_id: int) -> dict[str, Any] | None:
-        return next((user for user in self.data["users"] if user["id"] == user_id), None)
+def sanitize_user(user: Dict[str, Any]) -> Dict[str, Any]:
+    payload = deepcopy(user)
+    payload.pop("password", None)
+    face_auth = payload.pop("faceAuth", {})
+    payload["faceAuthEnabled"] = bool(face_auth.get("enabled"))
+    payload["faceSampleCount"] = int(face_auth.get("sampleCount") or 0)
+    payload["faceUpdatedAt"] = face_auth.get("updatedAt")
+    payload["faceRegisteredAt"] = face_auth.get("registeredAt")
+    payload["faceThreshold"] = face_auth.get("threshold", 0.42)
+    payload.setdefault("permissions", {"deviceTypes": [], "deviceIds": []})
+    return payload
 
-    def get_user_by_credentials(self, email: str, password: str) -> dict[str, Any] | None:
-        return next(
-            (user for user in self.data["users"] if user["email"] == email and user["password"] == password),
-            None,
-        )
 
-    def sanitize_user(self, user: dict[str, Any]) -> dict[str, Any]:
-        payload = deepcopy(user)
-        payload.pop("password", None)
-        if payload.get("faceAuth"):
-            payload["faceAuth"].pop("embedding", None)
-        return payload
-
-    def system_logs(self) -> list[dict[str, Any]]:
-        return self.data["systemLogs"]
-
-    def add_log(self, user: str, action: str, level: str = "info") -> None:
-        new_log = {
-            "id": max((item["id"] for item in self.data["systemLogs"]), default=0) + 1,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+def append_log(db: Dict[str, Any], *, user: str, action: str, level: str = "info") -> None:
+    logs = db.setdefault("systemLogs", [])
+    next_id = max((item["id"] for item in logs), default=0) + 1
+    logs.insert(
+        0,
+        {
+            "id": next_id,
+            "timestamp": now_iso(),
             "user": user,
             "action": action,
             "level": level,
-        }
-        self.data["systemLogs"].insert(0, new_log)
-        self.save()
+        },
+    )
 
 
-store = DataStore(STORE_PATH, SEED_PATH)
-face_engine = OpenCVFaceEngine(MODELS_DIR)
+def get_user_by_id(db: Dict[str, Any], user_id: int) -> Dict[str, Any]:
+    for user in db["users"]:
+        if user["id"] == user_id:
+            return user
+    raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
 
 
-def create_token(user_id: int) -> str:
-    return f"mock-token-{user_id}-{secrets.token_hex(8)}"
+def get_allowed_devices_for_user(db: Dict[str, Any], user: Dict[str, Any]) -> List[Dict[str, Any]]:
+    devices = db["devices"]
+    if user["role"] == "ADMIN":
+        return devices
+    if user["role"] != "MEMBER":
+        return []
+    allowed_types = set(user.get("permissions", {}).get("deviceTypes", []))
+    allowed_ids = set(user.get("permissions", {}).get("deviceIds", []))
+    return [
+        device
+        for device in devices
+        if device["type"] in allowed_types or device["id"] in allowed_ids
+    ]
 
 
-def require_user(user_id: int) -> dict[str, Any]:
-    user = store.get_user_by_id(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
-    return user
+def build_member_summary(db: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
+    allowed_devices = get_allowed_devices_for_user(db, user)
+    active_count = sum(1 for item in allowed_devices if item.get("power"))
+    online_count = sum(1 for item in allowed_devices if item.get("online"))
+    payload = sanitize_user(user)
+    payload["deviceCount"] = len(allowed_devices)
+    payload["activeDeviceCount"] = active_count
+    payload["onlineDeviceCount"] = online_count
+    return payload
 
 
-def parse_embedding(values: list[float]) -> np.ndarray:
-    return np.asarray(values, dtype=np.float32).reshape(1, -1)
+def compute_device_default_value(device_type: str) -> int:
+    if device_type == "light":
+        return 80
+    if device_type == "fan":
+        return 3
+    if device_type == "ac":
+        return 24
+    return 1
 
 
-@app.get("/api/face/health")
-def face_health():
-    return face_engine.health().__dict__
+def set_device_power(device: Dict[str, Any], power: bool) -> None:
+    device["power"] = power
+    if power:
+        device["value"] = compute_device_default_value(device["type"])
+    else:
+        device["value"] = 0
+
+
+def average_embeddings(items: List[np.ndarray]) -> np.ndarray:
+    merged = np.mean(np.stack(items, axis=0), axis=0)
+    norm = np.linalg.norm(merged)
+    if not norm:
+        raise HTTPException(status_code=400, detail="Embedding khuôn mặt không hợp lệ")
+    return merged / norm
+
+
+@app.get("/api/health")
+def health() -> Dict[str, str]:
+    return {"status": "ok"}
 
 
 @app.post("/api/login")
-def login(payload: LoginRequest):
-    user = store.get_user_by_credentials(payload.email, payload.password)
+def login(request: LoginRequest) -> Dict[str, Any]:
+    db = store.load()
+    user = next(
+        (item for item in db["users"] if item["email"] == request.email and item["password"] == request.password),
+        None,
+    )
     if not user:
         raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không đúng")
-    store.add_log(user["name"], "Đăng nhập bằng mật khẩu", "info")
-    return {"user": store.sanitize_user(user), "token": create_token(user["id"])}
 
+    append_log(db, user=user["name"], action="Đăng nhập bằng mật khẩu", level="info")
+    store.save(db)
 
-@app.get("/api/me")
-def me(userId: int):
-    user = require_user(userId)
-    return store.sanitize_user(user)
+    return {"user": sanitize_user(user), "token": f"mock-token-{user['id']}"}
 
 
 @app.get("/api/sensors")
-def sensors(userId: int | None = None):
-    target = str(userId or 1)
-    return store.data["sensors"].get(target, store.data["sensors"]["1"])
+def sensors(userId: int = Query(..., alias="userId")) -> Dict[str, Any]:
+    db = store.load()
+    payload = db.get("sensors", {}).get(str(userId))
+    if not payload:
+        raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu cảm biến")
+    return payload
 
 
 @app.get("/api/devices")
-def devices(userId: int | None = None):
+def list_devices(userId: Optional[int] = Query(None, alias="userId")) -> List[Dict[str, Any]]:
+    db = store.load()
     if userId is None:
-        return store.data["devices"]
-    return [device for device in store.data["devices"] if device["userId"] == int(userId)]
+        return db["devices"]
+    user = get_user_by_id(db, userId)
+    return get_allowed_devices_for_user(db, user)
 
 
 @app.post("/api/devices/{device_id}/toggle")
-def toggle_device(device_id: int, payload: ToggleDeviceRequest):
-    device = next((item for item in store.data["devices"] if item["id"] == device_id), None)
+def toggle_device(device_id: int, request: ToggleRequest) -> Dict[str, Any]:
+    db = store.load()
+    actor = get_user_by_id(db, request.actorId) if request.actorId is not None else None
+    device = next((item for item in db["devices"] if item["id"] == device_id), None)
     if not device:
         raise HTTPException(status_code=404, detail="Không tìm thấy thiết bị")
+    if not device.get("online"):
+        raise HTTPException(status_code=400, detail="Thiết bị đang offline, không thể bật/tắt")
+    if actor and actor["role"] == "MEMBER":
+        allowed_ids = {item["id"] for item in get_allowed_devices_for_user(db, actor)}
+        if device_id not in allowed_ids:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền điều khiển thiết bị này")
 
-    device["status"] = not device["status"]
-    if not device["status"]:
-        device["value"] = 0
-    else:
-        if device["type"] == "light":
-            device["value"] = 80
-        if device["type"] == "fan":
-            device["value"] = 3
-        if device["type"] == "ac":
-            device["value"] = 24
-
-    actor_name = "User"
-    if payload.userId:
-        actor = store.get_user_by_id(payload.userId)
-        if actor:
-            actor_name = actor["name"]
-    store.add_log(actor_name, f"{'Bật' if device['status'] else 'Tắt'} {device['name']}", "info")
-    store.save()
+    next_power = not bool(device.get("power"))
+    set_device_power(device, next_power)
+    append_log(
+        db,
+        user=actor["name"] if actor else "System",
+        action=f"{'Bật' if next_power else 'Tắt'} {device['name']}",
+        level="success" if next_power else "info",
+    )
+    store.save(db)
     return device
 
 
+@app.post("/api/devices/bulk-power")
+def bulk_power(request: BulkPowerRequest) -> Dict[str, Any]:
+    db = store.load()
+    if request.actorId is None:
+        raise HTTPException(status_code=403, detail="Thiếu actorId")
+    actor = get_user_by_id(db, request.actorId)
+    if actor["role"] != "ADMIN":
+        raise HTTPException(status_code=403, detail="Chỉ ADMIN mới được điều khiển tất cả thiết bị")
+
+    for device in db["devices"]:
+        if device.get("online"):
+            set_device_power(device, request.power)
+
+    append_log(
+        db,
+        user=actor["name"],
+        action=f"{'Bật' if request.power else 'Tắt'} tất cả thiết bị online",
+        level="success",
+    )
+    store.save(db)
+    return {"devices": db["devices"]}
+
+
 @app.get("/api/users")
-def users():
-    users = []
-    for user in store.data["users"]:
-        if user["role"] != "MEMBER":
-            continue
-        user_devices = [device for device in store.data["devices"] if device["userId"] == user["id"]]
-        active_count = sum(1 for device in user_devices if device["status"])
-        users.append(
-            {
-                **store.sanitize_user(user),
-                "deviceCount": len(user_devices),
-                "activeDeviceCount": active_count,
-            }
-        )
-    return users
+def list_users() -> List[Dict[str, Any]]:
+    db = store.load()
+    return [build_member_summary(db, user) for user in db["users"] if user["role"] == "MEMBER"]
 
 
 @app.get("/api/users/{user_id}")
-def user_detail(user_id: int):
-    return store.sanitize_user(require_user(user_id))
+def get_user(user_id: int) -> Dict[str, Any]:
+    db = store.load()
+    user = get_user_by_id(db, user_id)
+    if user["role"] == "MEMBER":
+        return build_member_summary(db, user)
+    return sanitize_user(user)
+
+
+@app.patch("/api/users/{user_id}/permissions")
+def update_permissions(user_id: int, request: PermissionRequest) -> Dict[str, Any]:
+    db = store.load()
+    target_user = get_user_by_id(db, user_id)
+    if target_user["role"] != "MEMBER":
+        raise HTTPException(status_code=400, detail="Chỉ có thể phân quyền cho tài khoản MEMBER")
+    actor_name = "Admin"
+    if request.actorId is not None:
+        actor = get_user_by_id(db, request.actorId)
+        if actor["role"] != "ADMIN":
+            raise HTTPException(status_code=403, detail="Chỉ ADMIN mới được phép phân quyền")
+        actor_name = actor["name"]
+
+    valid_types = {device["type"] for device in db["devices"]}
+    valid_ids = {device["id"] for device in db["devices"]}
+    target_user["permissions"] = {
+        "deviceTypes": [item for item in dict.fromkeys(request.deviceTypes) if item in valid_types],
+        "deviceIds": [item for item in dict.fromkeys(request.deviceIds) if item in valid_ids],
+    }
+
+    append_log(db, user=actor_name, action=f"Cập nhật phân quyền cho {target_user['name']}", level="success")
+    store.save(db)
+    return {"message": "Phân quyền thành công", "user": build_member_summary(db, target_user)}
 
 
 @app.get("/api/logs")
-def logs():
-    return store.system_logs()
+def logs() -> List[Dict[str, Any]]:
+    db = store.load()
+    return db.get("systemLogs", [])
+
+
+@app.get("/api/face/health")
+def face_health() -> Dict[str, Any]:
+    try:
+        get_face_engine()
+        return {"available": True, "message": "Face recognition đã sẵn sàng"}
+    except FaceEngineError as exc:
+        return {"available": False, "message": str(exc)}
 
 
 @app.post("/api/face/register")
-def face_register(payload: FaceImagesRequest):
-    user = require_user(payload.userId)
-    if len(payload.images) != 5:
-        raise HTTPException(status_code=400, detail="Cần đúng 5 ảnh mẫu để đăng ký khuôn mặt")
+def face_register(request: FaceRegisterRequest) -> Dict[str, Any]:
+    if len(request.images) != 5:
+        raise HTTPException(status_code=400, detail="Cần đúng 5 ảnh mẫu để đăng ký Face ID")
+    db = store.load()
+    user = get_user_by_id(db, request.userId)
     try:
-        template = face_engine.build_template(payload.images)
-    except FaceEngineError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        engine = get_face_engine()
+        embeddings = [engine.extract_embedding_from_data_url(image) for image in request.images]
+    except FaceEngineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
+    merged = average_embeddings(embeddings)
     face_auth = user.setdefault("faceAuth", {})
-    timestamp = datetime.now(timezone.utc).isoformat()
-    face_auth.update(
-        {
-            "enabled": True,
-            "sampleCount": 5,
-            "embedding": template.flatten().astype(float).tolist(),
-            "threshold": face_engine.threshold,
-            "registeredAt": face_auth.get("registeredAt") or timestamp,
-            "updatedAt": timestamp,
-        }
-    )
-    store.save()
-    store.add_log(user["name"], "Đăng ký khuôn mặt (5 ảnh mẫu)", "success")
-    return {
-        "message": "Đã đăng ký khuôn mặt thành công",
-        "user": store.sanitize_user(user),
-    }
+    face_auth["enabled"] = True
+    face_auth["sampleCount"] = len(request.images)
+    face_auth["registeredAt"] = face_auth.get("registeredAt") or now_iso()
+    face_auth["updatedAt"] = now_iso()
+    face_auth["threshold"] = 0.42
+    face_auth["embedding"] = merged.tolist()
+
+    append_log(db, user=user["name"], action="Đăng ký Face ID", level="success")
+    store.save(db)
+    return {"message": "Đăng ký Face ID thành công", "user": sanitize_user(user)}
 
 
 @app.post("/api/face/update")
-def face_update(payload: FaceImagesRequest):
-    user = require_user(payload.userId)
-    if len(payload.images) != 5:
-        raise HTTPException(status_code=400, detail="Cần đúng 5 ảnh mẫu để cập nhật khuôn mặt")
+def face_update(request: FaceRegisterRequest) -> Dict[str, Any]:
+    if len(request.images) != 5:
+        raise HTTPException(status_code=400, detail="Cần đúng 5 ảnh mẫu để cập nhật Face ID")
+    db = store.load()
+    user = get_user_by_id(db, request.userId)
     try:
-        template = face_engine.build_template(payload.images)
-    except FaceEngineError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        engine = get_face_engine()
+        embeddings = [engine.extract_embedding_from_data_url(image) for image in request.images]
+    except FaceEngineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
+    merged = average_embeddings(embeddings)
     face_auth = user.setdefault("faceAuth", {})
-    timestamp = datetime.now(timezone.utc).isoformat()
-    face_auth.update(
-        {
-            "enabled": True,
-            "sampleCount": 5,
-            "embedding": template.flatten().astype(float).tolist(),
-            "threshold": face_engine.threshold,
-            "registeredAt": face_auth.get("registeredAt") or timestamp,
-            "updatedAt": timestamp,
-        }
-    )
-    store.save()
-    store.add_log(user["name"], "Cập nhật dữ liệu khuôn mặt", "success")
-    return {
-        "message": "Đã cập nhật dữ liệu khuôn mặt thành công",
-        "user": store.sanitize_user(user),
-    }
+    face_auth["enabled"] = True
+    face_auth["sampleCount"] = len(request.images)
+    face_auth["registeredAt"] = face_auth.get("registeredAt") or now_iso()
+    face_auth["updatedAt"] = now_iso()
+    face_auth["threshold"] = face_auth.get("threshold", 0.42)
+    face_auth["embedding"] = merged.tolist()
+
+    append_log(db, user=user["name"], action="Cập nhật Face ID", level="success")
+    store.save(db)
+    return {"message": "Cập nhật Face ID thành công", "user": sanitize_user(user)}
 
 
 @app.post("/api/face/disable")
-def face_disable(payload: FaceDisableRequest):
-    user = require_user(payload.userId)
-    user["faceAuth"] = {
-        "enabled": False,
-        "sampleCount": 0,
-        "registeredAt": user.get("faceAuth", {}).get("registeredAt"),
-        "threshold": face_engine.threshold,
-        "embedding": [],
-        "updatedAt": datetime.now(timezone.utc).isoformat(),
-    }
-    store.save()
-    store.add_log(user["name"], "Tắt đăng nhập bằng khuôn mặt", "warning")
-    return {
-        "message": "Đã tắt đăng nhập bằng khuôn mặt",
-        "user": store.sanitize_user(user),
-    }
+def face_disable(request: FaceDisableRequest) -> Dict[str, Any]:
+    db = store.load()
+    user = get_user_by_id(db, request.userId)
+    face_auth = user.setdefault("faceAuth", {})
+    face_auth["enabled"] = False
+    face_auth["sampleCount"] = 0
+    face_auth["updatedAt"] = now_iso()
+    face_auth["embedding"] = []
+
+    append_log(db, user=user["name"], action="Tắt Face ID", level="info")
+    store.save(db)
+    return {"message": "Đã tắt Face ID", "user": sanitize_user(user)}
 
 
 @app.post("/api/face/login")
-def face_login(payload: FaceLoginRequest):
+def face_login(request: FaceLoginRequest) -> Dict[str, Any]:
+    db = store.load()
     try:
-        query_embedding = face_engine.embedding_from_data_url(payload.image)
-    except FaceEngineError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        engine = get_face_engine()
+        incoming = engine.extract_embedding_from_data_url(request.image)
+    except FaceEngineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
-    enrolled_users = []
-    for user in store.data["users"]:
-        face_auth = user.get("faceAuth") or {}
-        embedding_values = face_auth.get("embedding") or []
-        if face_auth.get("enabled") and embedding_values:
-            enrolled_users.append((user, parse_embedding(embedding_values)))
+    best_user: Optional[Dict[str, Any]] = None
+    best_score = -1.0
+    best_threshold = 0.42
 
-    try:
-        matched_user, score, second_score = face_engine.identify_best_match(query_embedding, enrolled_users)
-    except FaceEngineError as error:
-        store.add_log("System", f"Thử đăng nhập face thất bại: {error}", "warning")
-        raise HTTPException(status_code=401, detail=str(error)) from error
+    for user in db["users"]:
+        face_auth = user.get("faceAuth", {})
+        if not face_auth.get("enabled") or not face_auth.get("embedding"):
+            continue
+        stored = np.asarray(face_auth["embedding"], dtype=np.float32)
+        score = engine.cosine_similarity(incoming, stored)
+        threshold = float(face_auth.get("threshold", 0.42))
+        if score >= threshold and score > best_score:
+            best_score = score
+            best_user = user
+            best_threshold = threshold
 
-    store.add_log(matched_user["name"], f"Đăng nhập bằng khuôn mặt (score={score:.4f})", "success")
+    if not best_user:
+        raise HTTPException(status_code=401, detail="Không khớp với bất kỳ Face ID đã đăng ký nào")
+
+    append_log(
+        db,
+        user=best_user["name"],
+        action=f"Đăng nhập bằng Face ID (score={best_score:.3f}, threshold={best_threshold:.2f})",
+        level="success",
+    )
+    store.save(db)
     return {
         "message": "Xác thực khuôn mặt thành công",
-        "score": round(score, 4),
-        "secondScore": round(second_score, 4) if second_score >= 0 else None,
-        "user": store.sanitize_user(matched_user),
-        "token": create_token(matched_user["id"]),
+        "user": sanitize_user(best_user),
+        "token": f"mock-token-{best_user['id']}",
+        "score": round(best_score, 4),
     }
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("main:app", host="0.0.0.0", port=4000, reload=True)

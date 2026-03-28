@@ -9,6 +9,10 @@ MODELS = {
 ROOT = Path(__file__).resolve().parents[1] / "models"
 ROOT.mkdir(parents=True, exist_ok=True)
 
+MIN_SIZE = {
+    "face_detection_yunet_2023mar.onnx": 150_000,
+    "face_recognition_sface_2021dec.onnx": 30_000_000,
+}
 
 def download_file(url: str, target: Path) -> None:
     print(f"[download] {target.name}")
@@ -20,16 +24,12 @@ def download_file(url: str, target: Path) -> None:
                     handle.write(chunk)
     print(f"[ok] {target} ({target.stat().st_size} bytes)")
 
-
-for filename, url in MODELS.items():
-    target = ROOT / filename
-
-    # tải lại nếu file không tồn tại hoặc quá nhỏ
-    if target.exists() and target.stat().st_size > 100_000:
-        print(f"[skip] {filename} already exists")
-        continue
-
-    if target.exists():
-        target.unlink()
-
-    download_file(url, target)
+if __name__ == "__main__":
+    for filename, url in MODELS.items():
+        target = ROOT / filename
+        if target.exists() and target.stat().st_size >= MIN_SIZE[filename]:
+            print(f"[skip] {filename} already exists")
+            continue
+        if target.exists():
+            target.unlink()
+        download_file(url, target)

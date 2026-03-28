@@ -1,29 +1,23 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("smarthome_user");
-    const storedToken = localStorage.getItem("smarthome_token");
     if (storedUser) {
       setUser(JSON.parse(storedUser));
-    }
-    if (storedToken) {
-      setToken(storedToken);
     }
     setLoading(false);
   }, []);
 
-  const login = (userData, authToken) => {
+  const login = (userData, token) => {
     setUser(userData);
-    setToken(authToken);
     localStorage.setItem("smarthome_user", JSON.stringify(userData));
-    localStorage.setItem("smarthome_token", authToken);
+    if (token) localStorage.setItem("smarthome_token", token);
   };
 
   const updateUser = (userData) => {
@@ -33,17 +27,17 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     setUser(null);
-    setToken(null);
     localStorage.removeItem("smarthome_user");
     localStorage.removeItem("smarthome_token");
   };
 
-  const value = useMemo(
-    () => ({ user, token, loading, login, logout, updateUser }),
-    [user, token, loading]
+  return (
+    <AuthContext.Provider value={{ user, loading, login, updateUser, logout }}>
+      {children}
+    </AuthContext.Provider>
   );
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export const useAuth = () => useContext(AuthContext);
+export function useAuth() {
+  return useContext(AuthContext);
+}

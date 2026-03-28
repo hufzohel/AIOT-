@@ -22,21 +22,12 @@
   --color-accent-700: #c2410c;
 }
 
-:root {
-  color-scheme: light;
-}
-
-* {
-  box-sizing: border-box;
+html, body, #root {
+  min-height: 100%;
 }
 
 body {
-  margin: 0;
-  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
   background-color: #f8fafc;
   color: #1e293b;
-}
-
-button {
-  cursor: pointer;
 }

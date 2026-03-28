@@ -1,82 +1,72 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-export function useCamera() {
+export default function useCamera() {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState("");
 
-  const stopCamera = useCallback(() => {
-    const stream = streamRef.current;
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
     if (videoRef.current) {
+      videoRef.current.pause?.();
       videoRef.current.srcObject = null;
     }
     setCameraActive(false);
-  }, []);
+    setCameraLoading(false);
+  };
 
-  const startCamera = useCallback(async () => {
+  const startCamera = async () => {
+    setCameraError("");
+    setCameraLoading(true);
     try {
-      setCameraError("");
       stopCamera();
-
       const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
-        video: {
-          facingMode: "user",
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
       });
-
+      streamRef.current = stream;
       if (!videoRef.current) {
-        stream.getTracks().forEach((track) => track.stop());
         throw new Error("Không tìm thấy vùng hiển thị camera");
       }
-
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
-      streamRef.current = stream;
       setCameraActive(true);
     } catch (error) {
+      setCameraError(error.message || "Không thể bật camera");
       stopCamera();
-      setCameraError(
-        error?.message ||
-          "Không thể truy cập camera. Hãy cấp quyền camera cho trình duyệt."
-      );
+    } finally {
+      setCameraLoading(false);
     }
-  }, [stopCamera]);
+  };
 
-  const captureFrame = useCallback(() => {
+  const captureFrame = () => {
+    if (!videoRef.current || !cameraActive) {
+      throw new Error("Camera chưa sẵn sàng để chụp ảnh");
+    }
     const video = videoRef.current;
-    if (!video || !cameraActive) {
-      throw new Error("Camera chưa sẵn sàng");
-    }
-
-    const sourceWidth = video.videoWidth || 640;
-    const sourceHeight = video.videoHeight || 480;
-    const maxWidth = 640;
-    const scale = Math.min(1, maxWidth / sourceWidth);
-    const targetWidth = Math.max(320, Math.round(sourceWidth * scale));
-    const targetHeight = Math.round(sourceHeight * (targetWidth / sourceWidth));
-
     const canvas = document.createElement("canvas");
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    const context = canvas.getContext("2d", { willReadFrequently: false });
-    context.drawImage(video, 0, 0, targetWidth, targetHeight);
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL("image/jpeg", 0.92);
-  }, [cameraActive]);
+  };
 
-  useEffect(() => stopCamera, [stopCamera]);
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
 
   return {
     videoRef,
     cameraActive,
+    cameraLoading,
     cameraError,
+    setCameraError,
     startCamera,
     stopCamera,
     captureFrame,
