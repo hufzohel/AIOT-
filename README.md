@@ -58,7 +58,7 @@ source .venv/bin/activate
 # Cài dependencies
 pip install -r requirements.txt
 
-# Cấu hình database (sửa nếu cần)
+# Cấu hình database (sửa tuỳ thuộc vào URL sử dụng)
 # File backend/.env — mặc định:
 # DATABASE_URL=postgresql://postgres:postgres@localhost:5432/smart_home
 
