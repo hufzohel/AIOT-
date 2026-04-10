@@ -1,51 +1,22 @@
 from __future__ import annotations
 
 import json
-import shutil
-import threading
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from database import create_pool, close_pool, get_pool, record_to_dict, records_to_list
 from face_engine import FaceEngine, FaceEngineError
 
 BASE_DIR = Path(__file__).resolve().parent
-SEED_PATH = BASE_DIR / "data_seed.json"
-STORE_PATH = BASE_DIR / "data_store.json"
 MODEL_DIR = BASE_DIR / "models"
-
-
-class JsonStore:
-    def __init__(self, seed_path: Path, store_path: Path):
-        self.seed_path = seed_path
-        self.store_path = store_path
-        self.lock = threading.Lock()
-        self.ensure_store()
-
-    def ensure_store(self) -> None:
-        if not self.store_path.exists():
-            shutil.copy(self.seed_path, self.store_path)
-
-    def load(self) -> Dict[str, Any]:
-        with self.lock:
-            self.ensure_store()
-            return json.loads(self.store_path.read_text(encoding="utf-8"))
-
-    def save(self, payload: Dict[str, Any]) -> None:
-        with self.lock:
-            tmp_path = self.store_path.with_suffix(".tmp")
-            tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            tmp_path.replace(self.store_path)
-
-
-store = JsonStore(SEED_PATH, STORE_PATH)
-
 
 _engine: Optional[FaceEngine] = None
 _engine_error: Optional[str] = None
@@ -64,7 +35,14 @@ def get_face_engine() -> FaceEngine:
         raise
 
 
-app = FastAPI(title="AIoT Smart Home Unified Backend", version="1.0.0")
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    await create_pool()
+    yield
+    await close_pool()
+
+
+app = FastAPI(title="AIoT Smart Home Unified Backend", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -73,6 +51,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
 
 class LoginRequest(BaseModel):
     email: str
@@ -107,8 +89,42 @@ class FaceLoginRequest(BaseModel):
     image: str
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def parse_permissions(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, str):
+        return json.loads(raw)
+    if isinstance(raw, dict):
+        return raw
+    return {"deviceTypes": [], "deviceIds": []}
+
+
+def parse_face_auth(raw: Any) -> Dict[str, Any]:
+    if isinstance(raw, str):
+        return json.loads(raw)
+    if isinstance(raw, dict):
+        return raw
+    return {"enabled": False, "sampleCount": 0, "registeredAt": None, "updatedAt": None, "threshold": 0.42, "embedding": []}
+
+
+def row_to_user(record) -> Dict[str, Any]:
+    d = record_to_dict(record)
+    d["permissions"] = parse_permissions(d.get("permissions"))
+    d["faceAuth"] = parse_face_auth(d.pop("face_auth", None))
+    d.pop("created_at", None)
+    return d
+
+
+def row_to_device(record) -> Dict[str, Any]:
+    d = record_to_dict(record)
+    d.pop("created_at", None)
+    return d
 
 
 def sanitize_user(user: Dict[str, Any]) -> Dict[str, Any]:
@@ -124,51 +140,23 @@ def sanitize_user(user: Dict[str, Any]) -> Dict[str, Any]:
     return payload
 
 
-def append_log(db: Dict[str, Any], *, user: str, action: str, level: str = "info") -> None:
-    logs = db.setdefault("systemLogs", [])
-    next_id = max((item["id"] for item in logs), default=0) + 1
-    logs.insert(
-        0,
-        {
-            "id": next_id,
-            "timestamp": now_iso(),
-            "user": user,
-            "action": action,
-            "level": level,
-        },
-    )
-
-
-def get_user_by_id(db: Dict[str, Any], user_id: int) -> Dict[str, Any]:
-    for user in db["users"]:
-        if user["id"] == user_id:
-            return user
-    raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
-
-
-def get_allowed_devices_for_user(db: Dict[str, Any], user: Dict[str, Any]) -> List[Dict[str, Any]]:
-    devices = db["devices"]
+def get_allowed_devices(user: Dict[str, Any], devices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if user["role"] == "ADMIN":
         return devices
     if user["role"] != "MEMBER":
         return []
-    allowed_types = set(user.get("permissions", {}).get("deviceTypes", []))
-    allowed_ids = set(user.get("permissions", {}).get("deviceIds", []))
-    return [
-        device
-        for device in devices
-        if device["type"] in allowed_types or device["id"] in allowed_ids
-    ]
+    perms = user.get("permissions", {})
+    allowed_types = set(perms.get("deviceTypes", []))
+    allowed_ids = set(perms.get("deviceIds", []))
+    return [d for d in devices if d["type"] in allowed_types or d["id"] in allowed_ids]
 
 
-def build_member_summary(db: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
-    allowed_devices = get_allowed_devices_for_user(db, user)
-    active_count = sum(1 for item in allowed_devices if item.get("power"))
-    online_count = sum(1 for item in allowed_devices if item.get("online"))
+def build_member_summary(user: Dict[str, Any], devices: List[Dict[str, Any]]) -> Dict[str, Any]:
+    allowed = get_allowed_devices(user, devices)
     payload = sanitize_user(user)
-    payload["deviceCount"] = len(allowed_devices)
-    payload["activeDeviceCount"] = active_count
-    payload["onlineDeviceCount"] = online_count
+    payload["deviceCount"] = len(allowed)
+    payload["activeDeviceCount"] = sum(1 for d in allowed if d.get("power"))
+    payload["onlineDeviceCount"] = sum(1 for d in allowed if d.get("online"))
     return payload
 
 
@@ -182,12 +170,26 @@ def compute_device_default_value(device_type: str) -> int:
     return 1
 
 
-def set_device_power(device: Dict[str, Any], power: bool) -> None:
-    device["power"] = power
-    if power:
-        device["value"] = compute_device_default_value(device["type"])
-    else:
-        device["value"] = 0
+async def db_get_user_by_id(user_id: int) -> Dict[str, Any]:
+    pool = get_pool()
+    row = await pool.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+    return row_to_user(row)
+
+
+async def db_get_all_devices() -> List[Dict[str, Any]]:
+    pool = get_pool()
+    rows = await pool.fetch("SELECT * FROM devices ORDER BY id")
+    return [row_to_device(r) for r in rows]
+
+
+async def db_append_log(*, user: str, action: str, level: str = "info") -> None:
+    pool = get_pool()
+    await pool.execute(
+        'INSERT INTO system_logs ("user", action, level) VALUES ($1, $2, $3)',
+        user, action, level,
+    )
 
 
 def average_embeddings(items: List[np.ndarray]) -> np.ndarray:
@@ -198,142 +200,192 @@ def average_embeddings(items: List[np.ndarray]) -> np.ndarray:
     return merged / norm
 
 
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
 @app.get("/api/health")
-def health() -> Dict[str, str]:
+async def health() -> Dict[str, str]:
     return {"status": "ok"}
 
 
 @app.post("/api/login")
-def login(request: LoginRequest) -> Dict[str, Any]:
-    db = store.load()
-    user = next(
-        (item for item in db["users"] if item["email"] == request.email and item["password"] == request.password),
-        None,
+async def login(request: LoginRequest) -> Dict[str, Any]:
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "SELECT * FROM users WHERE email = $1 AND password = $2",
+        request.email, request.password,
     )
-    if not user:
+    if not row:
         raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không đúng")
 
-    append_log(db, user=user["name"], action="Đăng nhập bằng mật khẩu", level="info")
-    store.save(db)
-
+    user = row_to_user(row)
+    await db_append_log(user=user["name"], action="Đăng nhập bằng mật khẩu", level="info")
     return {"user": sanitize_user(user), "token": f"mock-token-{user['id']}"}
 
 
 @app.get("/api/sensors")
-def sensors(userId: int = Query(..., alias="userId")) -> Dict[str, Any]:
-    db = store.load()
-    payload = db.get("sensors", {}).get(str(userId))
-    if not payload:
+async def sensors(userId: int = Query(..., alias="userId")) -> Dict[str, Any]:
+    pool = get_pool()
+    rows = await pool.fetch(
+        "SELECT time, temperature, humidity, light FROM sensor_data WHERE user_id = $1 ORDER BY time",
+        userId,
+    )
+    if not rows:
         raise HTTPException(status_code=404, detail="Không tìm thấy dữ liệu cảm biến")
-    return payload
+
+    temperature = []
+    humidity = []
+    light = []
+    for r in rows:
+        temperature.append({"time": r["time"], "value": r["temperature"]})
+        humidity.append({"time": r["time"], "value": r["humidity"]})
+        light.append({"time": r["time"], "value": r["light"]})
+
+    return {"temperature": temperature, "humidity": humidity, "light": light}
 
 
 @app.get("/api/devices")
-def list_devices(userId: Optional[int] = Query(None, alias="userId")) -> List[Dict[str, Any]]:
-    db = store.load()
+async def list_devices(userId: Optional[int] = Query(None, alias="userId")) -> List[Dict[str, Any]]:
+    devices = await db_get_all_devices()
     if userId is None:
-        return db["devices"]
-    user = get_user_by_id(db, userId)
-    return get_allowed_devices_for_user(db, user)
+        return devices
+    user = await db_get_user_by_id(userId)
+    return get_allowed_devices(user, devices)
 
 
 @app.post("/api/devices/{device_id}/toggle")
-def toggle_device(device_id: int, request: ToggleRequest) -> Dict[str, Any]:
-    db = store.load()
-    actor = get_user_by_id(db, request.actorId) if request.actorId is not None else None
-    device = next((item for item in db["devices"] if item["id"] == device_id), None)
-    if not device:
+async def toggle_device(device_id: int, request: ToggleRequest) -> Dict[str, Any]:
+    pool = get_pool()
+    actor = await db_get_user_by_id(request.actorId) if request.actorId is not None else None
+
+    row = await pool.fetchrow("SELECT * FROM devices WHERE id = $1", device_id)
+    if not row:
         raise HTTPException(status_code=404, detail="Không tìm thấy thiết bị")
+
+    device = row_to_device(row)
     if not device.get("online"):
         raise HTTPException(status_code=400, detail="Thiết bị đang offline, không thể bật/tắt")
+
     if actor and actor["role"] == "MEMBER":
-        allowed_ids = {item["id"] for item in get_allowed_devices_for_user(db, actor)}
+        all_devices = await db_get_all_devices()
+        allowed_ids = {d["id"] for d in get_allowed_devices(actor, all_devices)}
         if device_id not in allowed_ids:
             raise HTTPException(status_code=403, detail="Bạn không có quyền điều khiển thiết bị này")
 
     next_power = not bool(device.get("power"))
-    set_device_power(device, next_power)
-    append_log(
-        db,
-        user=actor["name"] if actor else "System",
+    next_value = compute_device_default_value(device["type"]) if next_power else 0
+
+    updated = await pool.fetchrow(
+        "UPDATE devices SET power = $1, value = $2 WHERE id = $3 RETURNING *",
+        next_power, next_value, device_id,
+    )
+
+    actor_name = actor["name"] if actor else "System"
+    await db_append_log(
+        user=actor_name,
         action=f"{'Bật' if next_power else 'Tắt'} {device['name']}",
         level="success" if next_power else "info",
     )
-    store.save(db)
-    return device
+    return row_to_device(updated)
 
 
 @app.post("/api/devices/bulk-power")
-def bulk_power(request: BulkPowerRequest) -> Dict[str, Any]:
-    db = store.load()
+async def bulk_power(request: BulkPowerRequest) -> Dict[str, Any]:
     if request.actorId is None:
         raise HTTPException(status_code=403, detail="Thiếu actorId")
-    actor = get_user_by_id(db, request.actorId)
+    actor = await db_get_user_by_id(request.actorId)
     if actor["role"] != "ADMIN":
         raise HTTPException(status_code=403, detail="Chỉ ADMIN mới được điều khiển tất cả thiết bị")
 
-    for device in db["devices"]:
+    pool = get_pool()
+    for device in await db_get_all_devices():
         if device.get("online"):
-            set_device_power(device, request.power)
+            new_value = compute_device_default_value(device["type"]) if request.power else 0
+            await pool.execute(
+                "UPDATE devices SET power = $1, value = $2 WHERE id = $3",
+                request.power, new_value, device["id"],
+            )
 
-    append_log(
-        db,
+    await db_append_log(
         user=actor["name"],
         action=f"{'Bật' if request.power else 'Tắt'} tất cả thiết bị online",
         level="success",
     )
-    store.save(db)
-    return {"devices": db["devices"]}
+    devices = await db_get_all_devices()
+    return {"devices": devices}
 
 
 @app.get("/api/users")
-def list_users() -> List[Dict[str, Any]]:
-    db = store.load()
-    return [build_member_summary(db, user) for user in db["users"] if user["role"] == "MEMBER"]
+async def list_users() -> List[Dict[str, Any]]:
+    pool = get_pool()
+    rows = await pool.fetch("SELECT * FROM users WHERE role = 'MEMBER' ORDER BY id")
+    users = [row_to_user(r) for r in rows]
+    devices = await db_get_all_devices()
+    return [build_member_summary(u, devices) for u in users]
 
 
 @app.get("/api/users/{user_id}")
-def get_user(user_id: int) -> Dict[str, Any]:
-    db = store.load()
-    user = get_user_by_id(db, user_id)
+async def get_user(user_id: int) -> Dict[str, Any]:
+    user = await db_get_user_by_id(user_id)
     if user["role"] == "MEMBER":
-        return build_member_summary(db, user)
+        devices = await db_get_all_devices()
+        return build_member_summary(user, devices)
     return sanitize_user(user)
 
 
 @app.patch("/api/users/{user_id}/permissions")
-def update_permissions(user_id: int, request: PermissionRequest) -> Dict[str, Any]:
-    db = store.load()
-    target_user = get_user_by_id(db, user_id)
+async def update_permissions(user_id: int, request: PermissionRequest) -> Dict[str, Any]:
+    target_user = await db_get_user_by_id(user_id)
     if target_user["role"] != "MEMBER":
         raise HTTPException(status_code=400, detail="Chỉ có thể phân quyền cho tài khoản MEMBER")
+
     actor_name = "Admin"
     if request.actorId is not None:
-        actor = get_user_by_id(db, request.actorId)
+        actor = await db_get_user_by_id(request.actorId)
         if actor["role"] != "ADMIN":
             raise HTTPException(status_code=403, detail="Chỉ ADMIN mới được phép phân quyền")
         actor_name = actor["name"]
 
-    valid_types = {device["type"] for device in db["devices"]}
-    valid_ids = {device["id"] for device in db["devices"]}
-    target_user["permissions"] = {
-        "deviceTypes": [item for item in dict.fromkeys(request.deviceTypes) if item in valid_types],
-        "deviceIds": [item for item in dict.fromkeys(request.deviceIds) if item in valid_ids],
+    devices = await db_get_all_devices()
+    valid_types = {d["type"] for d in devices}
+    valid_ids = {d["id"] for d in devices}
+    new_perms = {
+        "deviceTypes": [t for t in dict.fromkeys(request.deviceTypes) if t in valid_types],
+        "deviceIds": [i for i in dict.fromkeys(request.deviceIds) if i in valid_ids],
     }
 
-    append_log(db, user=actor_name, action=f"Cập nhật phân quyền cho {target_user['name']}", level="success")
-    store.save(db)
-    return {"message": "Phân quyền thành công", "user": build_member_summary(db, target_user)}
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE users SET permissions = $1 WHERE id = $2",
+        json.dumps(new_perms), user_id,
+    )
+
+    await db_append_log(user=actor_name, action=f"Cập nhật phân quyền cho {target_user['name']}", level="success")
+
+    updated_user = await db_get_user_by_id(user_id)
+    return {"message": "Phân quyền thành công", "user": build_member_summary(updated_user, devices)}
 
 
 @app.get("/api/logs")
-def logs() -> List[Dict[str, Any]]:
-    db = store.load()
-    return db.get("systemLogs", [])
+async def logs() -> List[Dict[str, Any]]:
+    pool = get_pool()
+    rows = await pool.fetch('SELECT id, "user", action, level, created_at AS timestamp FROM system_logs ORDER BY created_at DESC')
+    result = []
+    for r in rows:
+        d = record_to_dict(r)
+        if d.get("timestamp"):
+            d["timestamp"] = d["timestamp"].isoformat() if hasattr(d["timestamp"], "isoformat") else str(d["timestamp"])
+        result.append(d)
+    return result
 
+
+# ---------------------------------------------------------------------------
+# Face ID endpoints
+# ---------------------------------------------------------------------------
 
 @app.get("/api/face/health")
-def face_health() -> Dict[str, Any]:
+async def face_health() -> Dict[str, Any]:
     try:
         get_face_engine()
         return {"available": True, "message": "Face recognition đã sẵn sàng"}
@@ -342,86 +394,116 @@ def face_health() -> Dict[str, Any]:
 
 
 @app.post("/api/face/register")
-def face_register(request: FaceRegisterRequest) -> Dict[str, Any]:
+async def face_register(request: FaceRegisterRequest) -> Dict[str, Any]:
     if len(request.images) != 5:
         raise HTTPException(status_code=400, detail="Cần đúng 5 ảnh mẫu để đăng ký Face ID")
-    db = store.load()
-    user = get_user_by_id(db, request.userId)
+
+    user = await db_get_user_by_id(request.userId)
     try:
         engine = get_face_engine()
-        embeddings = [engine.extract_embedding_from_data_url(image) for image in request.images]
+        embeddings = [engine.extract_embedding_from_data_url(img) for img in request.images]
     except FaceEngineError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
     merged = average_embeddings(embeddings)
-    face_auth = user.setdefault("faceAuth", {})
-    face_auth["enabled"] = True
-    face_auth["sampleCount"] = len(request.images)
-    face_auth["registeredAt"] = face_auth.get("registeredAt") or now_iso()
-    face_auth["updatedAt"] = now_iso()
-    face_auth["threshold"] = 0.42
-    face_auth["embedding"] = merged.tolist()
+    now = now_iso()
+    face_auth = user.get("faceAuth", {})
+    new_face_auth = {
+        "enabled": True,
+        "sampleCount": len(request.images),
+        "registeredAt": face_auth.get("registeredAt") or now,
+        "updatedAt": now,
+        "threshold": 0.42,
+        "embedding": merged.tolist(),
+    }
 
-    append_log(db, user=user["name"], action="Đăng ký Face ID", level="success")
-    store.save(db)
-    return {"message": "Đăng ký Face ID thành công", "user": sanitize_user(user)}
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE users SET face_auth = $1 WHERE id = $2",
+        json.dumps(new_face_auth), request.userId,
+    )
+    await db_append_log(user=user["name"], action="Đăng ký Face ID", level="success")
+
+    updated = await db_get_user_by_id(request.userId)
+    return {"message": "Đăng ký Face ID thành công", "user": sanitize_user(updated)}
 
 
 @app.post("/api/face/update")
-def face_update(request: FaceRegisterRequest) -> Dict[str, Any]:
+async def face_update(request: FaceRegisterRequest) -> Dict[str, Any]:
     if len(request.images) != 5:
         raise HTTPException(status_code=400, detail="Cần đúng 5 ảnh mẫu để cập nhật Face ID")
-    db = store.load()
-    user = get_user_by_id(db, request.userId)
+
+    user = await db_get_user_by_id(request.userId)
     try:
         engine = get_face_engine()
-        embeddings = [engine.extract_embedding_from_data_url(image) for image in request.images]
+        embeddings = [engine.extract_embedding_from_data_url(img) for img in request.images]
     except FaceEngineError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
     merged = average_embeddings(embeddings)
-    face_auth = user.setdefault("faceAuth", {})
-    face_auth["enabled"] = True
-    face_auth["sampleCount"] = len(request.images)
-    face_auth["registeredAt"] = face_auth.get("registeredAt") or now_iso()
-    face_auth["updatedAt"] = now_iso()
-    face_auth["threshold"] = face_auth.get("threshold", 0.42)
-    face_auth["embedding"] = merged.tolist()
+    now = now_iso()
+    face_auth = user.get("faceAuth", {})
+    new_face_auth = {
+        "enabled": True,
+        "sampleCount": len(request.images),
+        "registeredAt": face_auth.get("registeredAt") or now,
+        "updatedAt": now,
+        "threshold": face_auth.get("threshold", 0.42),
+        "embedding": merged.tolist(),
+    }
 
-    append_log(db, user=user["name"], action="Cập nhật Face ID", level="success")
-    store.save(db)
-    return {"message": "Cập nhật Face ID thành công", "user": sanitize_user(user)}
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE users SET face_auth = $1 WHERE id = $2",
+        json.dumps(new_face_auth), request.userId,
+    )
+    await db_append_log(user=user["name"], action="Cập nhật Face ID", level="success")
+
+    updated = await db_get_user_by_id(request.userId)
+    return {"message": "Cập nhật Face ID thành công", "user": sanitize_user(updated)}
 
 
 @app.post("/api/face/disable")
-def face_disable(request: FaceDisableRequest) -> Dict[str, Any]:
-    db = store.load()
-    user = get_user_by_id(db, request.userId)
-    face_auth = user.setdefault("faceAuth", {})
-    face_auth["enabled"] = False
-    face_auth["sampleCount"] = 0
-    face_auth["updatedAt"] = now_iso()
-    face_auth["embedding"] = []
+async def face_disable(request: FaceDisableRequest) -> Dict[str, Any]:
+    user = await db_get_user_by_id(request.userId)
+    now = now_iso()
+    new_face_auth = {
+        "enabled": False,
+        "sampleCount": 0,
+        "registeredAt": user.get("faceAuth", {}).get("registeredAt"),
+        "updatedAt": now,
+        "threshold": 0.42,
+        "embedding": [],
+    }
 
-    append_log(db, user=user["name"], action="Tắt Face ID", level="info")
-    store.save(db)
-    return {"message": "Đã tắt Face ID", "user": sanitize_user(user)}
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE users SET face_auth = $1 WHERE id = $2",
+        json.dumps(new_face_auth), request.userId,
+    )
+    await db_append_log(user=user["name"], action="Tắt Face ID", level="info")
+
+    updated = await db_get_user_by_id(request.userId)
+    return {"message": "Đã tắt Face ID", "user": sanitize_user(updated)}
 
 
 @app.post("/api/face/login")
-def face_login(request: FaceLoginRequest) -> Dict[str, Any]:
-    db = store.load()
+async def face_login(request: FaceLoginRequest) -> Dict[str, Any]:
     try:
         engine = get_face_engine()
         incoming = engine.extract_embedding_from_data_url(request.image)
     except FaceEngineError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    pool = get_pool()
+    rows = await pool.fetch("SELECT * FROM users")
+
     best_user: Optional[Dict[str, Any]] = None
     best_score = -1.0
     best_threshold = 0.42
 
-    for user in db["users"]:
+    for row in rows:
+        user = row_to_user(row)
         face_auth = user.get("faceAuth", {})
         if not face_auth.get("enabled") or not face_auth.get("embedding"):
             continue
@@ -436,13 +518,11 @@ def face_login(request: FaceLoginRequest) -> Dict[str, Any]:
     if not best_user:
         raise HTTPException(status_code=401, detail="Không khớp với bất kỳ Face ID đã đăng ký nào")
 
-    append_log(
-        db,
+    await db_append_log(
         user=best_user["name"],
         action=f"Đăng nhập bằng Face ID (score={best_score:.3f}, threshold={best_threshold:.2f})",
         level="success",
     )
-    store.save(db)
     return {
         "message": "Xác thực khuôn mặt thành công",
         "user": sanitize_user(best_user),
