@@ -24,7 +24,7 @@ CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION vector; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION vector; Type: COMMENT; Schema: -; Owner:
 --
 
 COMMENT ON EXTENSION vector IS 'vector data type and ivfflat and hnsw access methods';
@@ -35,16 +35,56 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: users; Type: TABLE; Schema: public; Owner: postgres
+-- Matches data_seed.json: id, email, password, name, role (MEMBER/ADMIN), permissions (jsonb), faceAuth (jsonb)
+--
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    email text NOT NULL,
+    password text NOT NULL,
+    name text NOT NULL,
+    role text NOT NULL DEFAULT 'MEMBER',
+    permissions jsonb NOT NULL DEFAULT '{"deviceTypes": [], "deviceIds": []}',
+    face_auth jsonb NOT NULL DEFAULT '{"enabled": false, "sampleCount": 0, "registeredAt": null, "updatedAt": null, "threshold": 0.42, "embedding": []}',
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE public.users OWNER TO postgres;
+
+--
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.users_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.users_id_seq OWNER TO postgres;
+
+ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
+
+
+--
 -- Name: devices; Type: TABLE; Schema: public; Owner: postgres
+-- Matches data_seed.json: id, name, type, room, online, power, value
+-- No user_id FK — access is controlled by user.permissions (deviceTypes / deviceIds)
 --
 
 CREATE TABLE public.devices (
     id integer NOT NULL,
-    user_id integer,
-    name text,
-    type text,
-    location text,
-    status text,
+    name text NOT NULL,
+    type text NOT NULL,
+    room text NOT NULL,
+    online boolean NOT NULL DEFAULT true,
+    power boolean NOT NULL DEFAULT false,
+    value integer NOT NULL DEFAULT 0,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -66,58 +106,21 @@ CREATE SEQUENCE public.devices_id_seq
 
 ALTER TABLE public.devices_id_seq OWNER TO postgres;
 
---
--- Name: devices_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
 ALTER SEQUENCE public.devices_id_seq OWNED BY public.devices.id;
 
 
 --
--- Name: face_profiles; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.face_profiles (
-    id integer NOT NULL,
-    user_id integer,
-    embedding public.vector(512),
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
-);
-
-
-ALTER TABLE public.face_profiles OWNER TO postgres;
-
---
--- Name: face_profiles_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.face_profiles_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE public.face_profiles_id_seq OWNER TO postgres;
-
---
--- Name: face_profiles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.face_profiles_id_seq OWNED BY public.face_profiles.id;
-
-
---
 -- Name: sensor_data; Type: TABLE; Schema: public; Owner: postgres
+-- Matches data_seed.json sensors: keyed by user_id, each row has time, temperature, humidity, light
 --
 
 CREATE TABLE public.sensor_data (
     id integer NOT NULL,
-    device_id integer,
+    user_id integer NOT NULL,
+    time text NOT NULL,
     temperature double precision,
     humidity double precision,
+    light double precision,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -139,23 +142,19 @@ CREATE SEQUENCE public.sensor_data_id_seq
 
 ALTER TABLE public.sensor_data_id_seq OWNER TO postgres;
 
---
--- Name: sensor_data_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
 ALTER SEQUENCE public.sensor_data_id_seq OWNED BY public.sensor_data.id;
 
 
 --
 -- Name: system_logs; Type: TABLE; Schema: public; Owner: postgres
+-- Matches data_seed.json systemLogs: id, timestamp, user (name string), action, level
 --
 
 CREATE TABLE public.system_logs (
     id integer NOT NULL,
-    user_id integer,
-    device_id integer,
-    action text,
-    status text,
+    "user" text NOT NULL,
+    action text NOT NULL,
+    level text NOT NULL DEFAULT 'info',
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -177,34 +176,35 @@ CREATE SEQUENCE public.system_logs_id_seq
 
 ALTER TABLE public.system_logs_id_seq OWNER TO postgres;
 
---
--- Name: system_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
 ALTER SEQUENCE public.system_logs_id_seq OWNED BY public.system_logs.id;
 
 
 --
--- Name: users; Type: TABLE; Schema: public; Owner: postgres
+-- Name: face_profiles; Type: TABLE; Schema: public; Owner: postgres
+-- Stores face embeddings separately for pgvector similarity search
+-- Mirrors user.faceAuth in data_seed.json
 --
 
-CREATE TABLE public.users (
+CREATE TABLE public.face_profiles (
     id integer NOT NULL,
-    email text,
-    full_name text,
-    role text,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    password text
+    user_id integer NOT NULL,
+    enabled boolean NOT NULL DEFAULT false,
+    sample_count integer NOT NULL DEFAULT 0,
+    threshold double precision NOT NULL DEFAULT 0.42,
+    embedding public.vector(512),
+    registered_at timestamp without time zone,
+    updated_at timestamp without time zone,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
 
-ALTER TABLE public.users OWNER TO postgres;
+ALTER TABLE public.face_profiles OWNER TO postgres;
 
 --
--- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: face_profiles_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
-CREATE SEQUENCE public.users_id_seq
+CREATE SEQUENCE public.face_profiles_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -213,227 +213,165 @@ CREATE SEQUENCE public.users_id_seq
     CACHE 1;
 
 
-ALTER TABLE public.users_id_seq OWNER TO postgres;
+ALTER TABLE public.face_profiles_id_seq OWNER TO postgres;
 
---
--- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
+ALTER SEQUENCE public.face_profiles_id_seq OWNED BY public.face_profiles.id;
 
 
 --
--- Name: devices id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.devices ALTER COLUMN id SET DEFAULT nextval('public.devices_id_seq'::regclass);
-
-
---
--- Name: face_profiles id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.face_profiles ALTER COLUMN id SET DEFAULT nextval('public.face_profiles_id_seq'::regclass);
-
-
---
--- Name: sensor_data id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.sensor_data ALTER COLUMN id SET DEFAULT nextval('public.sensor_data_id_seq'::regclass);
-
-
---
--- Name: system_logs id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.system_logs ALTER COLUMN id SET DEFAULT nextval('public.system_logs_id_seq'::regclass);
-
-
---
--- Name: users id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Set default values for id columns
 --
 
 ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
+ALTER TABLE ONLY public.devices ALTER COLUMN id SET DEFAULT nextval('public.devices_id_seq'::regclass);
+ALTER TABLE ONLY public.sensor_data ALTER COLUMN id SET DEFAULT nextval('public.sensor_data_id_seq'::regclass);
+ALTER TABLE ONLY public.system_logs ALTER COLUMN id SET DEFAULT nextval('public.system_logs_id_seq'::regclass);
+ALTER TABLE ONLY public.face_profiles ALTER COLUMN id SET DEFAULT nextval('public.face_profiles_id_seq'::regclass);
 
+
+-- ============================================================
+-- DATA
+-- ============================================================
 
 --
--- Data for Name: devices; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Matches data_seed.json users (role: MEMBER/ADMIN, permissions, faceAuth)
 --
 
-COPY public.devices (id, user_id, name, type, location, status, created_at) FROM stdin;
-1	1	Đèn phòng khách	light	Phòng khách	true	2026-04-08 18:14:37.586206
-2	1	Đèn phòng ngủ	light	Phòng ngủ	false	2026-04-08 18:14:37.586206
-3	1	Đèn nhà bếp	light	Nhà bếp	true	2026-04-08 18:14:37.586206
-4	1	Quạt phòng khách	fan	Phòng khách	true	2026-04-08 18:14:37.586206
-5	1	Quạt phòng ngủ	fan	Phòng ngủ	false	2026-04-08 18:14:37.586206
-6	1	Điều hòa phòng khách	ac	Phòng khách	true	2026-04-08 18:14:37.586206
-7	1	Điều hòa phòng ngủ	ac	Phòng ngủ	false	2026-04-08 18:14:37.586206
-8	3	Đèn phòng khách	light	Phòng khách	true	2026-04-08 18:14:37.586206
-9	3	Đèn phòng ngủ	light	Phòng ngủ	true	2026-04-08 18:14:37.586206
-10	3	Quạt trần	fan	Phòng khách	false	2026-04-08 18:14:37.586206
-11	3	Điều hòa phòng khách	ac	Phòng khách	true	2026-04-08 18:14:37.586206
+COPY public.users (id, email, password, name, role, permissions, face_auth, created_at) FROM stdin;
+1	member1@smarthome.com	password123	Nguyễn Văn A	MEMBER	{"deviceTypes": ["light", "fan"], "deviceIds": [6]}	{"enabled": false, "sampleCount": 0, "registeredAt": null, "updatedAt": null, "threshold": 0.42, "embedding": []}	2026-04-08 18:14:11.389115
+2	admin@smarthome.com	admin123	Trần Thị B	ADMIN	{"deviceTypes": [], "deviceIds": []}	{"enabled": false, "sampleCount": 0, "registeredAt": null, "updatedAt": null, "threshold": 0.42, "embedding": []}	2026-04-08 18:14:11.389115
+3	member2@smarthome.com	password456	Lê Minh C	MEMBER	{"deviceTypes": ["ac"], "deviceIds": [2, 9]}	{"enabled": false, "sampleCount": 0, "registeredAt": null, "updatedAt": null, "threshold": 0.42, "embedding": []}	2026-04-08 18:14:11.389115
 \.
 
 
 --
--- Data for Name: face_profiles; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: devices; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Matches data_seed.json devices (room, online, power, value — no user_id)
 --
 
-COPY public.face_profiles (id, user_id, embedding, created_at) FROM stdin;
+COPY public.devices (id, name, type, room, online, power, value, created_at) FROM stdin;
+1	Đèn phòng khách	light	Phòng khách	true	true	80	2026-04-08 18:14:37.586206
+2	Đèn phòng ngủ	light	Phòng ngủ	true	false	0	2026-04-08 18:14:37.586206
+3	Đèn nhà bếp	light	Nhà bếp	true	true	100	2026-04-08 18:14:37.586206
+4	Quạt phòng khách	fan	Phòng khách	true	true	3	2026-04-08 18:14:37.586206
+5	Quạt phòng ngủ	fan	Phòng ngủ	false	false	0	2026-04-08 18:14:37.586206
+6	Điều hòa phòng khách	ac	Phòng khách	true	true	24	2026-04-08 18:14:37.586206
+7	Điều hòa phòng ngủ	ac	Phòng ngủ	true	false	0	2026-04-08 18:14:37.586206
+8	Đèn ban công	light	Ban công	false	false	0	2026-04-08 18:14:37.586206
+9	Điều hòa phòng làm việc	ac	Phòng làm việc	true	true	23	2026-04-08 18:14:37.586206
+10	Quạt phòng làm việc	fan	Phòng làm việc	true	false	0	2026-04-08 18:14:37.586206
 \.
 
 
 --
 -- Data for Name: sensor_data; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Matches data_seed.json sensors keyed by userId, with temperature + humidity + light per time slot
 --
 
-COPY public.sensor_data (id, device_id, temperature, humidity, created_at) FROM stdin;
-1	1	26.2	72	2026-04-08 18:15:27.758385
-2	1	25.8	74	2026-04-08 18:15:27.758385
-3	1	25.5	75	2026-04-08 18:15:27.758385
-4	3	24.5	68	2026-04-08 18:15:27.758385
-5	3	24.2	70	2026-04-08 18:15:27.758385
+COPY public.sensor_data (id, user_id, time, temperature, humidity, light, created_at) FROM stdin;
+1	1	06:00	25.1	74	120	2026-04-08 18:15:27.758385
+2	1	09:00	28.4	66	560	2026-04-08 18:15:27.758385
+3	1	12:00	31.2	57	780	2026-04-08 18:15:27.758385
+4	1	15:00	30.0	60	630	2026-04-08 18:15:27.758385
+5	1	18:00	28.1	65	280	2026-04-08 18:15:27.758385
+6	1	21:00	26.4	70	90	2026-04-08 18:15:27.758385
+7	3	06:00	24.7	76	110	2026-04-08 18:15:27.758385
+8	3	09:00	27.6	68	520	2026-04-08 18:15:27.758385
+9	3	12:00	30.4	60	760	2026-04-08 18:15:27.758385
+10	3	15:00	29.3	62	610	2026-04-08 18:15:27.758385
+11	3	18:00	27.4	67	260	2026-04-08 18:15:27.758385
+12	3	21:00	25.9	72	80	2026-04-08 18:15:27.758385
 \.
 
 
 --
 -- Data for Name: system_logs; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Matches data_seed.json systemLogs: user is a name string, level instead of status
 --
 
-COPY public.system_logs (id, user_id, device_id, action, status, created_at) FROM stdin;
-1	\N	\N	Bật đèn phòng khách	info	2026-04-08 18:14:46.026805
-2	\N	\N	Điều chỉnh điều hòa: 22°C	info	2026-04-08 18:14:46.026805
-3	\N	\N	Điều chỉnh điều hòa phòng khách: 24°C	info	2026-04-08 18:14:46.026805
-4	\N	\N	Cảnh báo: Nhiệt độ vượt 32°C	warning	2026-04-08 18:14:46.026805
-5	\N	\N	Bật đèn phòng ngủ	info	2026-04-08 18:14:46.026805
-6	\N	\N	Kết nối thiết bị mới thành công	success	2026-04-08 18:14:46.026805
-7	\N	\N	Đăng nhập hệ thống	info	2026-04-08 18:14:46.026805
-8	\N	\N	Lỗi kết nối cảm biến ánh sáng	error	2026-04-08 18:14:46.026805
-9	\N	\N	Đăng nhập hệ thống	info	2026-04-08 18:14:46.026805
-10	\N	\N	Tắt quạt trần tự động	info	2026-04-08 18:14:46.026805
+COPY public.system_logs (id, "user", action, level, created_at) FROM stdin;
+1	Trần Thị B	Đăng nhập bằng mật khẩu	info	2026-03-27 08:30:00
+2	Nguyễn Văn A	Bật Đèn phòng khách	info	2026-03-27 08:20:00
+3	Lê Minh C	Bật Điều hòa phòng làm việc	success	2026-03-27 08:15:00
 \.
 
 
 --
--- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: face_profiles; Type: TABLE DATA; Schema: public; Owner: postgres
+-- No face profiles registered yet (all users have faceAuth.enabled = false)
 --
 
-COPY public.users (id, email, full_name, role, created_at, password) FROM stdin;
-1	user@smarthome.com	Nguyễn Văn A	USER	2026-04-08 18:14:11.389115	123456
-2	admin@smarthome.com	Trần Thị B	ADMIN	2026-04-08 18:14:11.389115	123456
-3	user2@smarthome.com	Lê Minh C	USER	2026-04-08 18:14:11.389115	123456
+COPY public.face_profiles (id, user_id, enabled, sample_count, threshold, embedding, registered_at, updated_at, created_at) FROM stdin;
 \.
 
 
 --
--- Name: devices_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Sequence resets
 --
 
-SELECT pg_catalog.setval('public.devices_id_seq', 1, false);
-
-
---
--- Name: face_profiles_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
---
-
+SELECT pg_catalog.setval('public.users_id_seq', 3, true);
+SELECT pg_catalog.setval('public.devices_id_seq', 10, true);
+SELECT pg_catalog.setval('public.sensor_data_id_seq', 12, true);
+SELECT pg_catalog.setval('public.system_logs_id_seq', 3, true);
 SELECT pg_catalog.setval('public.face_profiles_id_seq', 1, false);
 
 
---
--- Name: sensor_data_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
---
-
-SELECT pg_catalog.setval('public.sensor_data_id_seq', 5, true);
-
+-- ============================================================
+-- CONSTRAINTS
+-- ============================================================
 
 --
--- Name: system_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Primary keys
 --
 
-SELECT pg_catalog.setval('public.system_logs_id_seq', 1, false);
-
-
---
--- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
---
-
-SELECT pg_catalog.setval('public.users_id_seq', 1, false);
-
-
---
--- Name: devices devices_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.devices
     ADD CONSTRAINT devices_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.sensor_data
+    ADD CONSTRAINT sensor_data_pkey PRIMARY KEY (id);
 
---
--- Name: face_profiles face_profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
+ALTER TABLE ONLY public.system_logs
+    ADD CONSTRAINT system_logs_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.face_profiles
     ADD CONSTRAINT face_profiles_pkey PRIMARY KEY (id);
 
 
 --
--- Name: sensor_data sensor_data_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.sensor_data
-    ADD CONSTRAINT sensor_data_pkey PRIMARY KEY (id);
-
-
---
--- Name: system_logs system_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.system_logs
-    ADD CONSTRAINT system_logs_pkey PRIMARY KEY (id);
-
-
---
--- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Unique constraints
 --
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_email_key UNIQUE (email);
 
-
---
--- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.face_profiles
+    ADD CONSTRAINT face_profiles_user_id_key UNIQUE (user_id);
 
 
 --
--- Name: devices devices_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Foreign keys
 --
 
-ALTER TABLE ONLY public.devices
-    ADD CONSTRAINT devices_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
-
-
---
--- Name: face_profiles face_profiles_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
+ALTER TABLE ONLY public.sensor_data
+    ADD CONSTRAINT sensor_data_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 ALTER TABLE ONLY public.face_profiles
     ADD CONSTRAINT face_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
--- Name: sensor_data sensor_data_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Indexes for performance
 --
 
-ALTER TABLE ONLY public.sensor_data
-    ADD CONSTRAINT sensor_data_device_id_fkey FOREIGN KEY (device_id) REFERENCES public.devices(id);
+CREATE INDEX idx_sensor_data_user_id ON public.sensor_data (user_id);
+CREATE INDEX idx_system_logs_created_at ON public.system_logs (created_at DESC);
+CREATE INDEX idx_devices_type ON public.devices (type);
 
 
 --
 -- PostgreSQL database dump complete
 --
-
