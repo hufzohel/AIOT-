@@ -1,95 +1,193 @@
-# AIoT Smart Home - Unified FastAPI Edition
+# AIoT Smart Home
 
-Đây là bản triển khai **1 backend FastAPI + 1 frontend Vite/React** cho webapp nhà thông minh.
+Hệ thống quản lý nhà thông minh tích hợp trí tuệ nhân tạo và IoT.
+Backend FastAPI + PostgreSQL, Frontend React/Vite.
 
-## Kiến trúc chính
+## Kiến trúc
 
-- **Backend duy nhất:** FastAPI chạy tại `http://localhost:4000`
-- **Frontend:** React + Vite chạy tại `http://localhost:3000`
-- **Face recognition:** OpenCV `FaceDetectorYN` (YuNet) + `FaceRecognizerSF` (SFace)
+| Thành phần | Công nghệ | Port |
+|---|---|---|
+| **Backend** | FastAPI + asyncpg + PostgreSQL | `localhost:5000` |
+| **Frontend** | React + Vite + Tailwind CSS | `localhost:3000` |
+| **Database** | PostgreSQL 15+ | `localhost:5432` |
+| **Face ID** | OpenCV YuNet + SFace (tùy chọn) | — |
 
-## Luồng chính của web
+## Tài khoản demo
 
-### 1. Đăng nhập bằng mật khẩu
-- Mở webapp tại `http://localhost:3000`
-- Chọn tab **Mật khẩu**
-- Đăng nhập với một tài khoản demo
-  - `admin@smarthome.com / admin123`
-  - `member1@smarthome.com / password123`
-  - `member2@smarthome.com / password456`
+| Email | Mật khẩu | Vai trò |
+|---|---|---|
+| `admin@smarthome.com` | `admin123` | ADMIN |
+| `member1@smarthome.com` | `password123` | MEMBER |
+| `member2@smarthome.com` | `password456` | MEMBER |
 
-### 2. Đăng ký Face ID
-- Người dùng đăng nhập lần đầu bằng mật khẩu
-- Vào menu **Hồ sơ**
-- Bật camera
-- Chụp đủ **5 ảnh mẫu**
-- Nhấn **Đăng ký Face ID** hoặc **Cập nhật Face ID**
+## Cài đặt và chạy
 
-### 3. Đăng nhập bằng Face ID
-- Quay lại màn hình đăng nhập
-- Chọn tab **Face ID**
-- Bật camera và nhìn thẳng vào webcam
-- Nhấn **Xác thực ngay**
-- Nếu khớp, hệ thống sẽ đăng nhập trực tiếp
+### 1. Database (PostgreSQL)
 
-### 4. Phân quyền ADMIN / MEMBER
-- **ADMIN**
-  - xem danh sách MEMBER
-  - xem dashboard, thiết bị được cấp của từng MEMBER
-  - cấp quyền theo **loại thiết bị** hoặc **thiết bị cụ thể**
-  - điều khiển **toàn bộ thiết bị** tại tab **Thiết bị**
-- **MEMBER**
-  - chỉ thấy và điều khiển các thiết bị được cấp quyền
-  - tự đăng ký / cập nhật Face ID trong **Hồ sơ**
-
-## Chạy project
-
-### Backend
+**Cách A — Docker (khuyên dùng):**
 ```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate      # macOS/Linux
-# .venv\Scripts\activate     # Windows
-pip install -r requirements.txt
-python tools/download_models.py
-uvicorn main:app --reload --port 4000
+docker run -d --name smarthome-db \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=smart_home \
+  -p 5432:5432 \
+  postgres:15
 ```
 
-### Frontend
+**Cách B — PostgreSQL đã cài sẵn:**
+```bash
+psql -U postgres -c "CREATE DATABASE smart_home;"
+```
+
+**Import schema + data:**
+```bash
+psql -U postgres -d smart_home -f backend/db/backup.sql
+```
+
+### 2. Backend
+
+```bash
+cd backend
+
+# Tạo virtual environment (khuyên dùng)
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
+
+# Cài dependencies
+pip install -r requirements.txt
+
+# Cấu hình database (sửa nếu cần)
+# File backend/.env — mặc định:
+# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/smart_home
+
+# (Tùy chọn) Tải models cho Face ID
+python tools/download_models.py
+
+# Chạy server
+uvicorn main:app --reload --port 5000
+```
+
+### 3. Frontend
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## Cấu trúc
+Mở trình duyệt tại `http://localhost:3000`
 
-```text
-smarthome_fastapi_unified/
+## Cấu trúc thư mục
+
+```
+smart_home/
 ├── backend/
-│   ├── main.py
-│   ├── face_engine.py
-│   ├── data_seed.json
-│   ├── data_store.json
-│   ├── requirements.txt
-│   ├── models/
-│   └── tools/download_models.py
+│   ├── main.py              # FastAPI app — tất cả API endpoints
+│   ├── database.py          # Kết nối PostgreSQL (asyncpg pool)
+│   ├── face_engine.py       # OpenCV face detection/recognition
+│   ├── requirements.txt     # Python dependencies
+│   ├── .env                 # DATABASE_URL config
+│   ├── data_seed.json       # Dữ liệu mẫu (backup, không dùng runtime)
+│   ├── db/
+│   │   └── backup.sql       # Schema + seed data cho PostgreSQL
+│   ├── models/              # AI models (gitignored, tải qua script)
+│   └── tools/
+│       └── download_models.py
 ├── frontend/
+│   ├── index.html
 │   ├── package.json
-│   ├── vite.config.js
+│   ├── vite.config.js       # Vite config + proxy /api → backend
 │   └── src/
+│       ├── main.jsx
+│       ├── App.jsx           # Routes + Auth guards
+│       ├── index.css         # Tailwind CSS v4
+│       ├── lib/
+│       │   └── api.js        # Axios instance
+│       ├── contexts/
+│       │   └── AuthContext.jsx
+│       ├── components/
+│       │   ├── Layout.jsx
+│       │   ├── Sidebar.jsx
+│       │   ├── StatCard.jsx
+│       │   ├── DeviceCard.jsx
+│       │   ├── SensorChart.jsx
+│       │   ├── LightChart.jsx
+│       │   ├── MemberPermissionsPanel.jsx
+│       │   └── Toast.jsx
+│       └── pages/
+│           ├── LoginPage.jsx
+│           ├── DashboardPage.jsx
+│           ├── DevicesPage.jsx
+│           ├── UsersPage.jsx
+│           ├── UserDetailPage.jsx
+│           ├── LogsPage.jsx
+│           └── ProfilePage.jsx
+├── .gitignore
 └── README.md
 ```
 
-## Reset dữ liệu demo
+## API Endpoints
 
-Nếu muốn đưa dữ liệu về trạng thái ban đầu, xóa file `backend/data_store.json`. Backend sẽ tự copy lại từ `backend/data_seed.json` trong lần chạy kế tiếp.
+### Auth
+| Method | Route | Mô tả |
+|---|---|---|
+| POST | `/api/login` | Đăng nhập bằng email/password |
+
+### Sensors
+| Method | Route | Mô tả |
+|---|---|---|
+| GET | `/api/sensors?userId=X` | Dữ liệu cảm biến (temp, humidity, light) |
+
+### Devices
+| Method | Route | Mô tả |
+|---|---|---|
+| GET | `/api/devices` | Tất cả thiết bị (ADMIN) |
+| GET | `/api/devices?userId=X` | Thiết bị được cấp quyền cho user |
+| POST | `/api/devices/:id/toggle` | Bật/tắt thiết bị |
+| POST | `/api/devices/bulk-power` | Bật/tắt tất cả (ADMIN only) |
+
+### Users
+| Method | Route | Mô tả |
+|---|---|---|
+| GET | `/api/users` | Danh sách MEMBER |
+| GET | `/api/users/:id` | Chi tiết user |
+| PATCH | `/api/users/:id/permissions` | Phân quyền thiết bị (ADMIN only) |
+
+### System
+| Method | Route | Mô tả |
+|---|---|---|
+| GET | `/api/logs` | Nhật ký hệ thống |
+| GET | `/api/health` | Health check |
+
+### Face ID (tùy chọn)
+| Method | Route | Mô tả |
+|---|---|---|
+| GET | `/api/face/health` | Kiểm tra model sẵn sàng |
+| POST | `/api/face/register` | Đăng ký Face ID (5 ảnh) |
+| POST | `/api/face/update` | Cập nhật Face ID |
+| POST | `/api/face/disable` | Tắt Face ID |
+| POST | `/api/face/login` | Đăng nhập bằng Face ID |
+
+## Phân quyền
+
+- **ADMIN** — xem danh sách MEMBER, xem dashboard/thiết bị từng MEMBER, phân quyền, điều khiển toàn bộ thiết bị, xem logs
+- **MEMBER** — chỉ thấy và điều khiển thiết bị được cấp quyền, tự quản lý Face ID
+
+## Cấu hình
+
+Tất cả config nằm trong `backend/.env`:
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/smart_home
+```
+
+Sửa thông số cho phù hợp với môi trường của bạn.
 
 ## Ghi chú
 
-- Camera hoạt động tốt nhất trên `localhost`
-- Nếu `GET /api/face/health` báo lỗi model, hãy chạy lại:
-  ```bash
-  python tools/download_models.py
-  ```
-- Face ID là tính năng tùy chọn. Người dùng vẫn luôn có thể đăng nhập bằng mật khẩu.
+- Face ID là tính năng tùy chọn — người dùng luôn có thể đăng nhập bằng mật khẩu
+- Nếu `GET /api/face/health` báo lỗi model, chạy: `python tools/download_models.py`
+- Camera hoạt động tốt nhất trên `localhost` (HTTPS required cho domain khác)
+- `data_seed.json` chỉ là bản backup dữ liệu mẫu, backend không dùng file này khi chạy
