@@ -36,7 +36,6 @@ SET default_table_access_method = heap;
 
 --
 -- Name: users; Type: TABLE; Schema: public; Owner: postgres
--- Matches data_seed.json: id, email, password, name, role (MEMBER/ADMIN), permissions (jsonb), faceAuth (jsonb)
 --
 
 CREATE TABLE public.users (
@@ -111,7 +110,6 @@ ALTER SEQUENCE public.devices_id_seq OWNED BY public.devices.id;
 
 --
 -- Name: sensor_data; Type: TABLE; Schema: public; Owner: postgres
--- Matches data_seed.json sensors: keyed by user_id, each row has time, temperature, humidity, light
 --
 
 CREATE TABLE public.sensor_data (
@@ -147,7 +145,6 @@ ALTER SEQUENCE public.sensor_data_id_seq OWNED BY public.sensor_data.id;
 
 --
 -- Name: system_logs; Type: TABLE; Schema: public; Owner: postgres
--- Matches data_seed.json systemLogs: id, timestamp, user (name string), action, level
 --
 
 CREATE TABLE public.system_logs (
@@ -235,7 +232,6 @@ ALTER TABLE ONLY public.face_profiles ALTER COLUMN id SET DEFAULT nextval('publi
 
 --
 -- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
--- Matches data_seed.json users (role: MEMBER/ADMIN, permissions, faceAuth)
 --
 
 COPY public.users (id, email, password, name, role, permissions, face_auth, created_at) FROM stdin;
@@ -247,7 +243,6 @@ COPY public.users (id, email, password, name, role, permissions, face_auth, crea
 
 --
 -- Data for Name: devices; Type: TABLE DATA; Schema: public; Owner: postgres
--- Matches data_seed.json devices (room, online, power, value — no user_id)
 --
 
 COPY public.devices (id, name, type, room, online, power, value, created_at) FROM stdin;
@@ -266,7 +261,6 @@ COPY public.devices (id, name, type, room, online, power, value, created_at) FRO
 
 --
 -- Data for Name: sensor_data; Type: TABLE DATA; Schema: public; Owner: postgres
--- Matches data_seed.json sensors keyed by userId, with temperature + humidity + light per time slot
 --
 
 COPY public.sensor_data (id, user_id, time, temperature, humidity, light, created_at) FROM stdin;
@@ -287,7 +281,6 @@ COPY public.sensor_data (id, user_id, time, temperature, humidity, light, create
 
 --
 -- Data for Name: system_logs; Type: TABLE DATA; Schema: public; Owner: postgres
--- Matches data_seed.json systemLogs: user is a name string, level instead of status
 --
 
 COPY public.system_logs (id, "user", action, level, created_at) FROM stdin;
