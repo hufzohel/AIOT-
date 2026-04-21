@@ -15,3 +15,6 @@ Thumbs.db
 
 # Optional
 requirements.txt
+
+node_modules/
+**/node_modules/
