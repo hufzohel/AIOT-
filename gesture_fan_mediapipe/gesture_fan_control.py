@@ -36,6 +36,7 @@ class FanController:
     def fan_off(self) -> str:
         self.state.power = False
         self.state.speed = 0
+        self.state.swing = False
         return "FAN OFF"
 
     def set_speed(self, speed: int) -> str:
@@ -44,6 +45,12 @@ class FanController:
         return f"SPEED {speed}"
 
     def set_swing(self, enabled: bool) -> str:
+        if not self.state.power:
+            return "ERR: FAN IS OFF"
+            
+        if self.state.swing == enabled:
+            return f"ALREADY {'SWINGING' if enabled else 'FIXED'}"
+            
         self.state.swing = enabled
         return f"SWING {'ON' if enabled else 'OFF'}"
 
@@ -204,8 +211,8 @@ def main():
         base_options=BaseOptions(model_asset_path=MODEL_PATH),
         running_mode=VisionRunningMode.VIDEO,
         num_hands=1,
-        min_hand_detection_confidence=0.5,
-        min_hand_presence_confidence=0.5,
+        min_hand_detection_confidence=0.75,
+        min_hand_presence_confidence=0.75,
         min_tracking_confidence=0.5,
     )
 
@@ -225,12 +232,50 @@ def main():
     signal_text = "None"
     current_finger_states = None
 
+    last_server_sync_time = time.time()
+    SYNC_INTERVAL = 1.0  # seconds
+
     with GestureRecognizer.create_from_options(options) as recognizer:
         while True:
             ok, frame = cap.read()
             if not ok:
                 print("Cannot read frame from webcam.")
                 break
+
+            now = time.time()
+            if now - last_server_sync_time > SYNC_INTERVAL:
+                try:
+                    # Ask the master database what the actual state is
+                    res = requests.get("http://127.0.0.1:5000/api/devices", timeout=0.5)
+                    if res.status_code == 200:
+                        devices = res.json()
+                        # Find the fan in the list
+                        for d in devices:
+                            if d.get("type") == "fan":
+                                # 1. Read the exact state from the Node.js Server
+                                server_power = d.get("status", False)
+                                server_speed = d.get("value", 0)
+                                server_swing = d.get("swing", False)  # 👈 ADDED SWING
+                                
+                                # 2. Did the web dashboard change something?
+                                if (controller.state.power != server_power or 
+                                    controller.state.speed != server_speed or 
+                                    controller.state.swing != server_swing):  # 👈 CHECK SWING
+                                    
+                                    # 3. YES! Change the visual text on the video window
+                                    action_text = "WEB OVERRIDE" 
+                                    print(f"🔄 SYNC: Web dashboard changed Fan -> Power:{server_power}, Speed:{server_speed}, Swing:{server_swing}")
+                                
+                                # 4. Update Python's internal memory
+                                controller.state.power = server_power
+                                controller.state.speed = server_speed
+                                controller.state.swing = server_swing  # 👈 UPDATE SWING
+                                break
+                except requests.exceptions.RequestException as e:
+                    print(f"🔴 CRITICAL GET ERROR: {e}")
+                
+                last_server_sync_time = now
+            # ==========================================
 
             frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -318,6 +363,22 @@ def main():
 
                     stable_frames = 0
                     last_action_time = now
+
+                    # ==========================================
+                    # NEW: SYNC STATE TO NODE.JS BACKEND
+                    # ==========================================
+                    try:
+                        payload = {
+                            "power": controller.state.power,
+                            "speed": controller.state.speed,
+                            "swing": controller.state.swing
+                        }
+                        # Make sure this matches your backend port (5000)
+                        # We use a short timeout so the camera doesn't freeze if the server is off
+                        requests.post("http://localhost:5000/api/fan/state", json=payload, timeout=0.5)
+                    except requests.exceptions.RequestException as e:
+                        print(f"⚠️ BACKEND CONNECTION FAILED: {e}")
+                    # ==========================================
             else:
                 last_signal = None
                 stable_frames = 0

@@ -41,7 +41,8 @@ app.get("/api/devices", (req, res) => {
   res.json(devices);
 });
 
-app.post("/api/devices/:id/toggle", (req, res) => {
+// THE MASTER WEB ADAPTER: Handles Power, Speed, and Swing in one route!
+app.post("/api/devices/:id/update", (req, res) => {
   const id = parseInt(req.params.id);
   const device = devices.find((d) => d.id === id);
 
@@ -49,26 +50,47 @@ app.post("/api/devices/:id/toggle", (req, res) => {
     return res.status(404).json({ message: "Không tìm thấy thiết bị" });
   }
 
-  device.status = !device.status;
-  if (!device.status) {
-    device.value = 0;
-  } else {
-    if (device.type === "light") device.value = 80;
-    if (device.type === "fan") device.value = 3;
-    if (device.type === "ac") device.value = 24;
-  }
+  // Extract EVERYTHING the React app might send
+  const { status, value, swing, sleep } = req.body;
 
-  const newLog = {
-    id: systemLogs.length + 1,
-    timestamp: new Date().toISOString(),
-    user: "User",
-    action: `${device.status ? "Bật" : "Tắt"} ${device.name}`,
-    level: "info",
-  };
-  systemLogs.unshift(newLog);
+  // Update only the variables that were actually included in the request
+  if (status !== undefined) device.status = status;
+  if (value !== undefined) device.value = value;
+  if (swing !== undefined) device.swing = swing;
+  if (sleep !== undefined) device.sleep = sleep;
+
+  console.log(`Web Update Device ${id} -> Power: ${device.status}, Speed: ${device.value}, Swing: ${device.swing}, Sleep: ${device.sleep}`);
 
   res.json(device);
 });
+
+
+// UPGRADED HARDWARE ADAPTER: Python uses this to push physical gestures to the web
+app.post('/api/fan/state', (req, res) => {
+    // 1. Extract the exact payload sent by gesture_fan_control.py
+    const { power, speed, swing } = req.body;
+    
+    // 2. Find the fan in the master database array
+    const fanDevice = devices.find(d => d.type === "fan");
+    
+    if (fanDevice) {
+        // 3. Translate Python's variables into the Database's format
+        fanDevice.status = power;
+        fanDevice.value = speed;
+        fanDevice.swing = swing; 
+        
+        console.log(`📹🟢 CAMERA OVERRIDE: Fan updated to Power:${power}, Speed:${speed}, Swing:${swing}`); 
+    } else {
+        console.log("🔴 CRITICAL BUG: Could not find the fan in the devices array!");
+    }
+
+    res.status(200).send({ message: "Hardware state merged successfully" });
+});
+
+// 2. React uses this to READ the state
+// app.get('/api/fan/state', (req, res) => {
+//     res.status(200).json(currentFanState);
+// });
 
 app.get("/api/users", (req, res) => {
   const users = data.users
@@ -102,3 +124,5 @@ app.get("/api/logs", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+
