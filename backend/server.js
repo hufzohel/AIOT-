@@ -1,9 +1,24 @@
 const express = require("express");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
 const data = require("./data_raw.json");
 
 const app = express();
 const PORT = 5000;
+const DATA_DIR = path.join(__dirname, "data");
+const CSV_FILE = path.join(DATA_DIR, "temp_humid_training_data.csv");
+
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR);
+}
+
+// Initialize CSV file with headers if it doesn't exist
+if (!fs.existsSync(CSV_FILE)) {
+  fs.writeFileSync(CSV_FILE, "timestamp,temperature,humidity\n");
+}
 
 app.use(cors());
 app.use(express.json());
@@ -68,6 +83,31 @@ app.post("/api/devices/:id/toggle", (req, res) => {
   systemLogs.unshift(newLog);
 
   res.json(device);
+});
+
+app.post("/api/sensors/update", (req, res) => {
+  const { temperature, humidity } = req.body;
+  
+  // Format timestamp: YYYY/MM/DD hh:mm:ss
+  const now = new Date();
+  const timestamp = now.getFullYear() + "/" +
+    String(now.getMonth() + 1).padStart(2, "0") + "/" +
+    String(now.getDate()).padStart(2, "0") + " " +
+    String(now.getHours()).padStart(2, "0") + ":" +
+    String(now.getMinutes()).padStart(2, "0") + ":" +
+    String(now.getSeconds()).padStart(2, "0");
+  
+  console.log(`[${timestamp}] [ESP32] Received sensor data - Temp: ${temperature}, Hum: ${humidity}`);
+  
+  // Append data to CSV for training
+  const row = `${timestamp},${temperature},${humidity}\n`;
+  fs.appendFile(CSV_FILE, row, (err) => {
+    if (err) {
+      console.error("[Backend] Failed to save sensor data:", err);
+    }
+  });
+
+  res.json({ status: "success", message: "Data received and stored" });
 });
 
 app.get("/api/users", (req, res) => {
