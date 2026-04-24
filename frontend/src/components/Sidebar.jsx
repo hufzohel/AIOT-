@@ -1,12 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Cpu,
-  Users,
-  ScrollText,
-  LogOut,
-  Home,
-} from "lucide-react";
+import { Cpu, Home, LayoutDashboard, LogOut, ScrollText, UserCircle2, Users } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Sidebar() {
@@ -33,10 +26,8 @@ export default function Sidebar() {
           <Home className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="text-white font-bold text-lg leading-tight">
-            AIoT Home
-          </h1>
-          <p className="text-blue-200 text-xs">Smart Living</p>
+          <h1 className="text-white font-bold text-lg leading-tight">AIoT Home</h1>
+          <p className="text-blue-200 text-xs">Unified FastAPI</p>
         </div>
       </div>
 
@@ -46,6 +37,14 @@ export default function Sidebar() {
             <NavLink to="/users" className={linkClass}>
               <Users className="w-5 h-5" />
               Người dùng
+            </NavLink>
+            <NavLink to="/devices" className={linkClass}>
+              <Cpu className="w-5 h-5" />
+              Thiết bị
+            </NavLink>
+            <NavLink to="/profile" className={linkClass}>
+              <UserCircle2 className="w-5 h-5" />
+              Hồ sơ
             </NavLink>
             <NavLink to="/logs" className={linkClass}>
               <ScrollText className="w-5 h-5" />
@@ -62,6 +61,10 @@ export default function Sidebar() {
               <Cpu className="w-5 h-5" />
               Thiết bị
             </NavLink>
+            <NavLink to="/profile" className={linkClass}>
+              <UserCircle2 className="w-5 h-5" />
+              Hồ sơ
+            </NavLink>
           </>
         )}
       </nav>
@@ -72,9 +75,7 @@ export default function Sidebar() {
             {user?.name?.charAt(0) || "U"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">
-              {user?.name}
-            </p>
+            <p className="text-white text-sm font-medium truncate">{user?.name}</p>
             <p className="text-blue-200 text-xs">{user?.role}</p>
           </div>
         </div>

@@ -18,3 +18,53 @@ requirements.txt
 
 node_modules/
 **/node_modules/
+# ========================
+# 🔹 FRONTEND (React/Vite)
+# ========================
+frontend/node_modules/
+dist/
+.vite/
+.env
+.env.local
+
+# ========================
+# 🔹 BACKEND (Python)
+# ========================
+backend/.venv/
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/models
+
+# ========================
+# 🔹 MODELS (RẤT QUAN TRỌNG)
+# ========================
+backend/models/*.onnx
+
+# ========================
+# 🔹 DATA (face embeddings)
+# ========================
+backend/data_store.json
+
+# ========================
+# 🔹 SYSTEM FILES
+# ========================
+.DS_Store
+Thumbs.db
+
+# ========================
+# 🔹 LOGS
+# ========================
+*.log
+
+# ========================
+# 🔹 IDE
+# ========================
+.vscode/
+.idea/
+
+# ========================
+# 🔹 TEMP FILES
+# ========================
+*.tmp
+*.swp

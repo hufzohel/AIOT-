@@ -1,61 +1,95 @@
-## run 
-### backend - terminal 1
-```
+# AIoT Smart Home - Unified FastAPI Edition
+
+Đây là bản triển khai **1 backend FastAPI + 1 frontend Vite/React** cho webapp nhà thông minh.
+
+## Kiến trúc chính
+
+- **Backend duy nhất:** FastAPI chạy tại `http://localhost:4000`
+- **Frontend:** React + Vite chạy tại `http://localhost:3000`
+- **Face recognition:** OpenCV `FaceDetectorYN` (YuNet) + `FaceRecognizerSF` (SFace)
+
+## Luồng chính của web
+
+### 1. Đăng nhập bằng mật khẩu
+- Mở webapp tại `http://localhost:3000`
+- Chọn tab **Mật khẩu**
+- Đăng nhập với một tài khoản demo
+  - `admin@smarthome.com / admin123`
+  - `member1@smarthome.com / password123`
+  - `member2@smarthome.com / password456`
+
+### 2. Đăng ký Face ID
+- Người dùng đăng nhập lần đầu bằng mật khẩu
+- Vào menu **Hồ sơ**
+- Bật camera
+- Chụp đủ **5 ảnh mẫu**
+- Nhấn **Đăng ký Face ID** hoặc **Cập nhật Face ID**
+
+### 3. Đăng nhập bằng Face ID
+- Quay lại màn hình đăng nhập
+- Chọn tab **Face ID**
+- Bật camera và nhìn thẳng vào webcam
+- Nhấn **Xác thực ngay**
+- Nếu khớp, hệ thống sẽ đăng nhập trực tiếp
+
+### 4. Phân quyền ADMIN / MEMBER
+- **ADMIN**
+  - xem danh sách MEMBER
+  - xem dashboard, thiết bị được cấp của từng MEMBER
+  - cấp quyền theo **loại thiết bị** hoặc **thiết bị cụ thể**
+  - điều khiển **toàn bộ thiết bị** tại tab **Thiết bị**
+- **MEMBER**
+  - chỉ thấy và điều khiển các thiết bị được cấp quyền
+  - tự đăng ký / cập nhật Face ID trong **Hồ sơ**
+
+## Chạy project
+
+### Backend
+```bash
 cd backend
-npm start
+python3 -m venv .venv
+source .venv/bin/activate      # macOS/Linux
+# .venv\Scripts\activate     # Windows
+pip install -r requirements.txt
+python tools/download_models.py
+uvicorn main:app --reload --port 4000
 ```
 
-### frontend - terminal 2
-```
+### Frontend
+```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-# Gesture Fan Control (MediaPipe + Webcam)
+## Cấu trúc
 
-Tính năng này chỉ làm một việc: dùng **webcam laptop** để nhận diện cử chỉ tay và **bật/tắt quạt**.
-
-## Cử chỉ
-| Cử chỉ                     | Mô tả                       | Chức năng                       |
-| -------------------------- | --------------------------- | ------------------------------- |
-| ✋ `Open_Palm`             | Mở bàn tay                  | **BẬT quạt**                    |
-| ✊ `Closed_Fist`           | Nắm tay                     | **TẮT quạt**                    |
-| 👍 `Thumb_Up`              | Ngón cái hướng lên          | **Bật chế độ quay (SWING ON)**  |
-| 👎 `Thumb_Down`            | Ngón cái hướng xuống        | **Tắt chế độ quay (SWING OFF)** |
-| ☝️ `Index`                 | 1 ngón trỏ                  | **Speed 1**                     |
-| ✌️ `Index + Middle`        | 2 ngón (trỏ + giữa)         | **Speed 2**                     |
-| 🤟 `Index + Middle + Ring` | 3 ngón (trỏ + giữa + áp út) | **Speed 3**                     |
-
-*Lưu ý*: Khi chỉnh SPEED thì phải giữ nguyên và hướng mu bàn tay về webcam
-
-## Yêu cầu
-- Python 3.11 hoặc 3.12
-- Webcam hoạt động bình thường
-
-## Cài đặt
-```bash
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
-
-pip install -r requirements.txt
+```text
+smarthome_fastapi_unified/
+├── backend/
+│   ├── main.py
+│   ├── face_engine.py
+│   ├── data_seed.json
+│   ├── data_store.json
+│   ├── requirements.txt
+│   ├── models/
+│   └── tools/download_models.py
+├── frontend/
+│   ├── package.json
+│   ├── vite.config.js
+│   └── src/
+└── README.md
 ```
 
-## Chạy
-```bash
-python gesture_fan_control.py --auto-download-model
-```
+## Reset dữ liệu demo
 
-## Tùy chọn
-```bash
-python gesture_fan_control.py --camera-id 0 --stable-frames 5 --min-score 0.6 --auto-download-model
-```
-
-## Thoát
-- Nhấn `Q` hoặc `ESC`
+Nếu muốn đưa dữ liệu về trạng thái ban đầu, xóa file `backend/data_store.json`. Backend sẽ tự copy lại từ `backend/data_seed.json` trong lần chạy kế tiếp.
 
 ## Ghi chú
-- Script sẽ tự tải file model `gesture_recognizer.task` vào thư mục `models/` nếu chưa có và bạn bật cờ `--auto-download-model`.
-- Đây là bản **standalone**, chưa nối vào phần cứng thật. Để điều khiển quạt thật, thay phần `FanController.apply()` bằng lệnh serial, HTTP, MQTT hoặc GPIO tùy phần cứng của bạn.
+
+- Camera hoạt động tốt nhất trên `localhost`
+- Nếu `GET /api/face/health` báo lỗi model, hãy chạy lại:
+  ```bash
+  python tools/download_models.py
+  ```
+- Face ID là tính năng tùy chọn. Người dùng vẫn luôn có thể đăng nhập bằng mật khẩu.

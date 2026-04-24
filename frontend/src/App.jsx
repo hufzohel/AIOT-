@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Layout from "./components/Layout";
 import LoginPage from "./pages/LoginPage";
@@ -7,16 +7,28 @@ import DevicesPage from "./pages/DevicesPage";
 import UsersPage from "./pages/UsersPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import LogsPage from "./pages/LogsPage";
+import ProfilePage from "./pages/ProfilePage";
 
-function AdminRoute({ children }) {
-  const { user } = useAuth();
-  if (user?.role !== "ADMIN") return <Navigate to="/dashboard" replace />;
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 }
 
-function UserRoute({ children }) {
-  const { user } = useAuth();
-  if (user?.role !== "USER") return <Navigate to="/users" replace />;
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "ADMIN") return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
+function MemberRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "MEMBER") return <Navigate to="/users" replace />;
   return children;
 }
 
@@ -24,20 +36,16 @@ function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (user) {
-    return (
-      <Navigate
-        to={user.role === "ADMIN" ? "/users" : "/dashboard"}
-        replace
-      />
-    );
+    return <Navigate to={user.role === "ADMIN" ? "/users" : "/dashboard"} replace />;
   }
   return children;
 }
 
 function DefaultRedirect() {
-  const { user } = useAuth();
-  if (user?.role === "ADMIN") return <Navigate to="/users" replace />;
-  return <Navigate to="/dashboard" replace />;
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={user.role === "ADMIN" ? "/users" : "/dashboard"} replace />;
 }
 
 export default function App() {
@@ -53,22 +61,38 @@ export default function App() {
               </PublicRoute>
             }
           />
-          <Route path="/" element={<Layout />}>
+
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
             <Route index element={<DefaultRedirect />} />
             <Route
               path="dashboard"
               element={
-                <UserRoute>
+                <MemberRoute>
                   <DashboardPage />
-                </UserRoute>
+                </MemberRoute>
               }
             />
             <Route
               path="devices"
               element={
-                <UserRoute>
+                <ProtectedRoute>
                   <DevicesPage />
-                </UserRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="profile"
+              element={
+                <ProtectedRoute>
+                  <ProfilePage />
+                </ProtectedRoute>
               }
             />
             <Route
@@ -96,6 +120,7 @@ export default function App() {
               }
             />
           </Route>
+
           <Route path="*" element={<DefaultRedirect />} />
         </Routes>
       </AuthProvider>
