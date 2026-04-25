@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Power, Search } from "lucide-react";
-import api from "../lib/api"; // Kept for the bulk power API call
+import api from "../lib/api"; 
 import { useAuth } from "../contexts/AuthContext";
-import { useDeviceSync } from "../hooks/useDeviceSync"; // YOUR architecture
-import Toast from "../components/Toast"; // THEIR UI feature
+import { useDeviceSync } from "../hooks/useDeviceSync"; 
+import Toast from "../components/Toast"; 
 
-// YOUR polymorphic cards
 import FanCard from "../components/FanCard";
 import ACCard from "../components/ACCard";
 import LightCard from "../components/LightCard";
@@ -13,10 +12,13 @@ import LightCard from "../components/LightCard";
 export default function DevicesPage({ userId: propUserId, readOnly = false }) {
   const { user } = useAuth();
   
-  // State from both branches
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [toast, setToast] = useState({ open: false, type: "info", message: "" });
+  
+  const closeToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, open: false }));
+  }, []); 
 
   const isScopedMemberView = Boolean(propUserId);
   const isAdminGlobalPage = !propUserId && user?.role === "ADMIN";
@@ -24,10 +26,8 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
 
   const showToast = (type, message) => setToast({ open: true, type, message });
 
-  // YOUR custom hook powers the data engine
   const { devices, toggleDevice, updateValue, updateSwing, updateSleep } = useDeviceSync(targetUserId);
 
-  // WRAPPER: Adds their Toast UI and security checks to your hardware toggle
   const handleToggle = async (id) => {
     const target = devices.find((item) => item.id === id);
     if (!target) return;
@@ -36,14 +36,13 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
       showToast("error", "Đây là chế độ theo dõi thiết bị được phân quyền cho MEMBER.");
       return;
     }
-    // Optional: Keep their offline check if your hardware sync supports it
+    
     if (target.online === false) {
       showToast("error", `Thiết bị "${target.name}" đang offline nên không thể bật/tắt.`);
       return;
     }
 
     try {
-      // Calls YOUR hook
       await toggleDevice(id);
       showToast("success", `Đã gửi lệnh cập nhật trạng thái cho "${target.name}".`);
     } catch (error) {
@@ -51,35 +50,28 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
     }
   };
 
-  // THEIR Admin Bulk Power Logic
   const handleBulkPower = async (power) => {
     try {
       await api.post("/devices/bulk-power", { actorId: user?.id, power });
       showToast("success", `${power ? "Bật" : "Tắt"} tất cả thiết bị thành công.`);
-      // Note: Your useDeviceSync hook should auto-fetch/sync this change
     } catch (error) {
       showToast("error", "Không thể cập nhật toàn bộ thiết bị.");
     }
   };
 
-  // Unified Filtering Logic
   const filtered = useMemo(() => {
-    return devices.filter((d) => {
+    return (devices || []).filter((d) => {
       const matchSearch = d.name.toLowerCase().includes(search.toLowerCase());
       const matchFilter = filter === "all" || d.type === filter;
       return matchSearch && matchFilter;
     });
   }, [devices, search, filter]);
 
-  // THEIR Statistics Calculations
-  const onlineCount = devices.filter((device) => device.online !== false).length; // Default to true if missing
-  const onCount = devices.filter((device) => device.status || device.power).length; // Adapting to your data structure
+  const onlineCount = (devices || []).filter((device) => device.online !== false).length; 
+  const onCount = (devices || []).filter((device) => device.status || device.power).length; 
 
   return (
     <div className="space-y-6">
-      <Toast open={toast.open} type={toast.type} message={toast.message} onClose={() => setToast((prev) => ({ ...prev, open: false }))} />
-
-      {/* 1. THEIR HEADER & BULK ADMIN BUTTONS */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">{isScopedMemberView ? "Thiết bị được cấp" : "Thiết bị"}</h2>
@@ -106,11 +98,10 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
         )}
       </div>
 
-      {/* 2. THEIR STATISTICS GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500">Tổng thiết bị</p>
-          <p className="text-2xl font-bold text-slate-800 mt-1">{devices.length}</p>
+          <p className="text-2xl font-bold text-slate-800 mt-1">{(devices || []).length}</p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500">Đang online</p>
@@ -122,7 +113,6 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
         </div>
       </div>
 
-      {/* 3. THEIR SEARCH BAR & NEW BUTTON FILTERS */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -152,7 +142,6 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
         </div>
       </div>
 
-      {/* 4. YOUR MASTER ARCHITECTURE (Polymorphic Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filtered.map((device) => {
           if (device.type === "fan") {
@@ -163,7 +152,7 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
                 onToggle={() => handleToggle(device.id)}
                 onSpeedChange={updateValue}   
                 onSwingToggle={updateSwing}   
-                readOnly={readOnly} // Pass readOnly down just in case
+                readOnly={readOnly} 
               />
             );
           }
@@ -191,12 +180,18 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
         })}
       </div>
 
-      {/* EMPTY STATE */}
       {filtered.length === 0 && (
         <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">
           <p className="text-slate-400 text-sm">Không tìm thấy thiết bị phù hợp</p>
         </div>
       )}
+
+      <Toast 
+        open={toast.open} 
+        type={toast.type} 
+        message={toast.message} 
+        onClose={closeToast} 
+      />
     </div>
   );
 }

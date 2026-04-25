@@ -20,7 +20,8 @@ function AdminRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== "ADMIN") return <Navigate to="/dashboard" replace />;
+  // FORCE UPPERCASE & BOUNCE TO NEUTRAL GROUND
+  if (user?.role?.toUpperCase() !== "ADMIN") return <Navigate to="/devices" replace />;
   return children;
 }
 
@@ -28,15 +29,31 @@ function MemberRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== "MEMBER") return <Navigate to="/users" replace />;
+  // FORCE UPPERCASE & BOUNCE TO NEUTRAL GROUND
+  if (user?.role?.toUpperCase() !== "USER") return <Navigate to="/devices" replace />;
   return children;
 }
+
+// function MemberRoute({ children }) {
+//   const { user, loading } = useAuth();
+//   if (loading) return null;
+//   if (!user) return <Navigate to="/login" replace />;
+  
+//   const role = user?.role?.toUpperCase();
+  
+//   // THE FIX: Allow both "MEMBER" and "USER" to enter the dashboard
+//   if (role !== "MEMBER" && role !== "USER") {
+//     return <Navigate to="/devices" replace />;
+//   }
+  
+//   return children;
+// }
 
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (user) {
-    return <Navigate to={user.role === "ADMIN" ? "/users" : "/dashboard"} replace />;
+    return <Navigate to={user?.role?.toUpperCase() === "ADMIN" ? "/users" : "/dashboard"} replace />;
   }
   return children;
 }
@@ -45,7 +62,7 @@ function DefaultRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.role === "ADMIN" ? "/users" : "/dashboard"} replace />;
+  return <Navigate to={user?.role?.toUpperCase() === "ADMIN" ? "/users" : "/dashboard"} replace />;
 }
 
 export default function App() {
