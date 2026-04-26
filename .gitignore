@@ -1,7 +1,9 @@
+# ========================
 # Python
-.venv/
+# ========================
 __pycache__/
 *.pyc
+<<<<<<< HEAD
 
 # Model files
 *.task
@@ -12,6 +14,12 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+=======
+*.pyo
+.venv/
+backend/.venv/
+backend/.env
+>>>>>>> origin/db
 
 # Optional
 requirements.txt
@@ -19,52 +27,48 @@ requirements.txt
 node_modules/
 **/node_modules/
 # ========================
-# 🔹 FRONTEND (React/Vite)
+# Node.js / Frontend
 # ========================
 frontend/node_modules/
-dist/
-.vite/
+frontend/dist/
+frontend/.vite/
+
+# ========================
+# Environment
+# ========================
 .env
 .env.local
+.env.production
 
 # ========================
-# 🔹 BACKEND (Python)
+# AI Models (download via tools/download_models.py)
 # ========================
-backend/.venv/
-backend/__pycache__/
-backend/*.pyc
-backend/*.pyo
-backend/models
+backend/models/
+*.onnx
+*.task
 
 # ========================
-# 🔹 MODELS (RẤT QUAN TRỌNG)
-# ========================
-backend/models/*.onnx
-
-# ========================
-# 🔹 DATA (face embeddings)
+# Runtime data (generated)
 # ========================
 backend/data_store.json
 
 # ========================
-# 🔹 SYSTEM FILES
+# OS
 # ========================
 .DS_Store
 Thumbs.db
 
 # ========================
-# 🔹 LOGS
-# ========================
-*.log
-
-# ========================
-# 🔹 IDE
+# IDE
 # ========================
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # ========================
-# 🔹 TEMP FILES
+# Logs / Temp
 # ========================
+*.log
 *.tmp
 *.swp
