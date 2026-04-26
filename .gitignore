@@ -3,7 +3,6 @@
 # ========================
 __pycache__/
 *.pyc
-<<<<<<< HEAD
 
 # Model files
 *.task
@@ -14,12 +13,10 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
-=======
 *.pyo
 .venv/
 backend/.venv/
 backend/.env
->>>>>>> origin/db
 
 # Optional
 requirements.txt
