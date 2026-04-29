@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Cpu, Home, LayoutDashboard, LogOut, ScrollText, UserCircle2, Users } from "lucide-react";
+import { Cpu, Home, LayoutDashboard, LogOut, ScrollText, UserCircle2, Users, Video } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Sidebar() {
@@ -42,6 +42,10 @@ export default function Sidebar() {
               <Cpu className="w-5 h-5" />
               Thiết bị
             </NavLink>
+            <NavLink to="/monitor" className={linkClass}>
+              <Video className="w-5 h-5" />
+              Camera
+            </NavLink>
             <NavLink to="/profile" className={linkClass}>
               <UserCircle2 className="w-5 h-5" />
               Hồ sơ
@@ -60,6 +64,11 @@ export default function Sidebar() {
             <NavLink to="/devices" className={linkClass}>
               <Cpu className="w-5 h-5" />
               Thiết bị
+            </NavLink>
+            {/* temporary maybe remove later */}
+            <NavLink to="/monitor" className={linkClass}>
+              <Video className="w-5 h-5" />
+              Camera
             </NavLink>
             <NavLink to="/profile" className={linkClass}>
               <UserCircle2 className="w-5 h-5" />

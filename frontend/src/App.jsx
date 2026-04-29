@@ -8,6 +8,7 @@ import UsersPage from "./pages/UsersPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import LogsPage from "./pages/LogsPage";
 import ProfilePage from "./pages/ProfilePage";
+import MonitorPage from "./pages/MonitorPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -101,6 +102,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DevicesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="monitor"
+              element={
+                <ProtectedRoute>
+                  <MonitorPage />
                 </ProtectedRoute>
               }
             />

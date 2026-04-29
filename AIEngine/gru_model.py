@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class TempPredictorGRU(nn.Module):
     # Notice input_size is a parameter! We set the default to 1 for our baseline.
-    def __init__(self, input_size=1, hidden_size=32, num_layers=1, output_size=1):
+    def __init__(self, input_size=4, hidden_size=32, num_layers=1, output_size=1):
         super(TempPredictorGRU, self).__init__()
         
         self.hidden_size = hidden_size

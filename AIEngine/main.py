@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 
 from database import create_pool, close_pool, get_pool, record_to_dict, records_to_list
 from face_engine import FaceEngine, FaceEngineError
+from routers import gesture  # Import the new socket
+from routers import temperature
 
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
@@ -50,6 +52,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Snap the puzzle pieces together
+app.include_router(gesture.router, prefix="/api/gesture", tags=["Gestures"])
+app.include_router(temperature.router, prefix="/api/temperature", tags=["Temperature AI"])
 
 
 # ---------------------------------------------------------------------------
