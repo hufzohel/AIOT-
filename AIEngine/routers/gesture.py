@@ -1,36 +1,47 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-# Import the engine you already built!
-from gesture_engine import GestureEngine, GestureEngineError
+from typing import Dict
+import sys
 from pathlib import Path
 
-# Create the router (the socket)
+# Ensure Python can find your AI files
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+# Import the new Master Brain
+from master_consensus_engine import MultiCameraEngine
+
 router = APIRouter()
 
-# Initialize the brain (pointing to your models folder)
-MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
+# 1. Initialize the Master Brain (which automatically loads the Tracker and Detector)
 try:
-    engine = GestureEngine(MODEL_DIR)
+    engine = MultiCameraEngine()
+    print("✅ Multi-Camera Consensus Engine loaded and online.")
 except Exception as e:
-    print(f"Warning: Could not load GestureEngine: {e}")
+    print(f"⚠️ Warning: Could not load Master Engine: {e}")
     engine = None
 
-# Create a strict schema for what the frontend is allowed to send
-class FrameRequest(BaseModel):
-    image: str  # The base64 string from the webcam
+# 2. Update the Schema: We now expect a payload of MULTIPLE cameras
+class RoomStateRequest(BaseModel):
+    # Expecting a dictionary like:
+    # {
+    #   "cam_1": "base64_string...",
+    #   "cam_2": "base64_string...",
+    #   "cam_3": "base64_string..."
+    # }
+    frames: Dict[str, str]
 
 @router.post("/process")
-async def process_gesture(request: FrameRequest):
+async def process_room_gestures(request: RoomStateRequest):
     if not engine:
-        raise HTTPException(status_code=500, detail="Gesture Engine is offline")
+        raise HTTPException(status_code=500, detail="Consensus Engine is offline")
     
     try:
-        # Hand the frame to the brain, get the answer back
-        result = engine.process_frame(request.image)
+        # Hand the entire room's visual data to the Master Brain
+        result = engine.process_room_state(request.frames)
         
-        # NOTE: This is where we will eventually add the code to 
-        # touch the PostgreSQL vault if a signal (like FAN_ON) is detected.
+        # NOTE: If result["event"] == "COMMAND_ISSUED", 
+        # this is where we will trigger the PostgreSQL update!
         
         return result
-    except GestureEngineError as e:
+    except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from copy import deepcopy
@@ -22,6 +23,7 @@ MODEL_DIR = BASE_DIR / "models"
 
 _engine: Optional[FaceEngine] = None
 _engine_error: Optional[str] = None
+_cleanup_task: Optional[asyncio.Task] = None
 
 
 def get_face_engine() -> FaceEngine:
@@ -37,10 +39,35 @@ def get_face_engine() -> FaceEngine:
         raise
 
 
+async def cleanup_expired_overrides():
+    """Background task: Clean up expired device overrides every 5 minutes."""
+    while True:
+        try:
+            await asyncio.sleep(300)  # Run every 5 minutes
+            pool = get_pool()
+            await pool.execute("DELETE FROM device_overrides WHERE expires_at < NOW()")
+        except Exception as e:
+            print(f"Cleanup task error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    global _cleanup_task
     await create_pool()
+    
+    # Start background cleanup task
+    _cleanup_task = asyncio.create_task(cleanup_expired_overrides())
+    
     yield
+    
+    # Cancel cleanup task on shutdown
+    if _cleanup_task:
+        _cleanup_task.cancel()
+        try:
+            await _cleanup_task
+        except asyncio.CancelledError:
+            pass
+    
     await close_pool()
 
 
@@ -252,11 +279,43 @@ async def sensors(userId: int = Query(..., alias="userId")) -> Dict[str, Any]:
 
 @app.get("/api/devices")
 async def list_devices(userId: Optional[int] = Query(None, alias="userId")) -> List[Dict[str, Any]]:
+    pool = get_pool()
+    
+    # Clean up expired overrides
+    await pool.execute("DELETE FROM device_overrides WHERE expires_at < NOW()")
+    
     devices = await db_get_all_devices()
-    if userId is None:
-        return devices
-    user = await db_get_user_by_id(userId)
-    return get_allowed_devices(user, devices)
+    
+    # If userId provided, check permissions and include override info
+    if userId is not None:
+        user = await db_get_user_by_id(userId)
+        devices = get_allowed_devices(user, devices)
+        
+        # Enrich each device with override info
+        enriched = []
+        for device in devices:
+            override = await pool.fetchrow(
+                """SELECT * FROM device_overrides 
+                   WHERE device_id = $1 AND expires_at > NOW()
+                   ORDER BY created_at DESC LIMIT 1""",
+                device["id"]
+            )
+            
+            device_data = deepcopy(device)
+            if override:
+                device_data["override"] = {
+                    "id": override["id"],
+                    "manualValue": override["manual_value"],
+                    "expiresAt": override["expires_at"].isoformat() if override["expires_at"] else None
+                }
+            else:
+                device_data["override"] = None
+            
+            enriched.append(device_data)
+        
+        return enriched
+    
+    return devices
 
 
 @app.post("/api/devices/{device_id}/toggle")
@@ -319,6 +378,118 @@ async def bulk_power(request: BulkPowerRequest) -> Dict[str, Any]:
     )
     devices = await db_get_all_devices()
     return {"devices": devices}
+
+
+# ---------------------------------------------------------------------------
+# Device Override endpoints (Manual control with auto-expiration)
+# ---------------------------------------------------------------------------
+
+class DeviceOverrideRequest(BaseModel):
+    userId: int
+    deviceId: int
+    manualValue: int
+    reason: Optional[str] = None
+    expiresInSeconds: int = 3600  # Default 1 hour
+
+
+@app.post("/api/device-overrides")
+async def set_device_override(request: DeviceOverrideRequest) -> Dict[str, Any]:
+    """
+    User manually sets a device value. This creates an override record that expires after 1 hour.
+    Frontend uses this value until it expires, then falls back to actual/predicted values.
+    """
+    pool = get_pool()
+    
+    # Validate device & user exist
+    device = await pool.fetchrow("SELECT * FROM devices WHERE id = $1", request.deviceId)
+    if not device:
+        raise HTTPException(status_code=404, detail="Thiết bị không tồn tại")
+    
+    user = await db_get_user_by_id(request.userId)
+    
+    # Check permissions
+    all_devices = await db_get_all_devices()
+    if user["role"] == "MEMBER":
+        allowed_ids = {d["id"] for d in get_allowed_devices(user, all_devices)}
+        if request.deviceId not in allowed_ids:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền điều khiển thiết bị này")
+    
+    # Calculate expiration time
+    expires_at = datetime.now(timezone.utc) + __import__('datetime').timedelta(seconds=request.expiresInSeconds)
+    
+    # Clear old overrides and create new one
+    await pool.execute(
+        "DELETE FROM device_overrides WHERE device_id = $1 AND user_id = $2",
+        request.deviceId, request.userId
+    )
+    
+    await pool.execute(
+        """INSERT INTO device_overrides (device_id, user_id, manual_value, reason, expires_at)
+           VALUES ($1, $2, $3, $4, $5)""",
+        request.deviceId, request.userId, request.manualValue, request.reason, expires_at
+    )
+    
+    await db_append_log(
+        user=user["name"],
+        action=f"Điều chỉnh thủ công {device['name']} thành {request.manualValue}",
+        level="info"
+    )
+    
+    return {
+        "message": "Cài đặt thủ công thành công",
+        "deviceId": request.deviceId,
+        "manualValue": request.manualValue,
+        "expiresAt": expires_at.isoformat()
+    }
+
+
+@app.get("/api/device-overrides/{device_id}")
+async def get_device_override(device_id: int) -> Dict[str, Any]:
+    """Get active override for a device, or empty if none/expired."""
+    pool = get_pool()
+    
+    # Clean up expired overrides first
+    await pool.execute(
+        "DELETE FROM device_overrides WHERE device_id = $1 AND expires_at < NOW()",
+        device_id
+    )
+    
+    # Get latest active override
+    override = await pool.fetchrow(
+        """SELECT * FROM device_overrides 
+           WHERE device_id = $1 AND expires_at > NOW()
+           ORDER BY created_at DESC LIMIT 1""",
+        device_id
+    )
+    
+    if not override:
+        return {"active": False, "override": None}
+    
+    return {
+        "active": True,
+        "override": {
+            "id": override["id"],
+            "manualValue": override["manual_value"],
+            "reason": override["reason"],
+            "expiresAt": override["expires_at"].isoformat() if override["expires_at"] else None
+        }
+    }
+
+
+@app.delete("/api/device-overrides/{override_id}")
+async def cancel_device_override(override_id: int) -> Dict[str, str]:
+    """Cancel a manual override immediately."""
+    pool = get_pool()
+    
+    result = await pool.execute(
+        "DELETE FROM device_overrides WHERE id = $1",
+        override_id
+    )
+    
+    if result == "DELETE 0":
+        raise HTTPException(status_code=404, detail="Override không tồn tại")
+    
+    return {"message": "Đã hủy cài đặt thủ công"}
 
 
 @app.get("/api/users")

@@ -109,6 +109,42 @@ ALTER SEQUENCE public.devices_id_seq OWNED BY public.devices.id;
 
 
 --
+-- Name: device_overrides; Type: TABLE; Schema: public; Owner: postgres
+-- Tracks manual user overrides with auto-expiration to prevent trash accumulation
+--
+
+CREATE TABLE public.device_overrides (
+    id integer NOT NULL,
+    device_id integer NOT NULL REFERENCES public.devices(id) ON DELETE CASCADE,
+    user_id integer NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    manual_value integer NOT NULL,
+    reason text,
+    expires_at timestamp without time zone NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '1 hour'),
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE public.device_overrides OWNER TO postgres;
+
+--
+-- Name: device_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.device_overrides_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.device_overrides_id_seq OWNER TO postgres;
+
+ALTER SEQUENCE public.device_overrides_id_seq OWNED BY public.device_overrides.id;
+
+
+--
 -- Name: sensor_data; Type: TABLE; Schema: public; Owner: postgres
 --
 
