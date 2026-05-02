@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Cpu, Droplets, Power, Thermometer, Wifi } from "lucide-react";
 import api from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
@@ -11,11 +11,15 @@ export default function DashboardPage({ userId: propUserId }) {
   const targetUserId = propUserId || user?.id;
   const [sensors, setSensors] = useState(null);
   const [devices, setDevices] = useState([]);
+  const [prediction, setPrediction] = useState(null);
+  const [predictionLoading, setPredictionLoading] = useState(false);
 
   useEffect(() => {
     if (!targetUserId) return;
     api.get("/sensors", { params: { userId: targetUserId } }).then((res) => setSensors(res.data)).catch(() => setSensors(null));
     api.get("/devices", { params: { userId: targetUserId } }).then((res) => setDevices(res.data)).catch(() => setDevices([]));
+    setPredictionLoading(true);
+    api.get("/temperature/predict").then((res) => setPrediction(res.data)).catch((err) => console.error("Prediction failed:", err)).finally(() => setPredictionLoading(false));
   }, [targetUserId]);
 
   const latest = useMemo(() => {
@@ -53,6 +57,21 @@ export default function DashboardPage({ userId: propUserId }) {
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400">Không có dữ liệu cảm biến cho người dùng này.</div>
       )}
+
+      {/* AI Prediction Card */}
+      <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white">
+        <h3 className="text-lg font-semibold">🤖 AI Temperature Prediction</h3>
+        {predictionLoading ? (
+          <p>Loading prediction...</p>
+        ) : prediction ? (
+          <>
+            <p className="text-4xl font-bold mt-2">{prediction.prediction_celsius}°C</p>
+            <p className="text-sm mt-1 opacity-90">{prediction.message}</p>
+          </>
+        ) : (
+          <p className="text-red-300">Failed to load prediction</p>
+        )}
+      </div>
     </div>
   );
 }

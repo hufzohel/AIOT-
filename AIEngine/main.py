@@ -43,7 +43,7 @@ async def cleanup_expired_overrides():
     """Background task: Clean up expired device overrides every 5 minutes."""
     while True:
         try:
-            await asyncio.sleep(300)  # Run every 5 minutes
+            await asyncio.sleep(30)  
             pool = get_pool()
             await pool.execute("DELETE FROM device_overrides WHERE expires_at < NOW()")
         except Exception as e:
