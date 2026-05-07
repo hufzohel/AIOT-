@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Cpu, Droplets, Power, Thermometer, Wifi } from "lucide-react";
 import api from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";

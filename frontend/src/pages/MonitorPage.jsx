@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import useCamera from '../hooks/useCamera';
 import useGestureDetection from '../hooks/useGestureDetection';
 import useFaceRecognition from '../hooks/useFaceRecognition';
@@ -6,9 +6,13 @@ import useFaceRecognition from '../hooks/useFaceRecognition';
 const Monitor = () => {
   const [expandedCamera, setExpandedCamera] = useState(null);
 
+  // --- THE AI KILL SWITCHES ---
+  const [enableFace, setEnableFace] = useState(false); // Default OFF so it stops spamming 401
+  const [enableGesture, setEnableGesture] = useState(true); // Default ON for your testing
+
   // --- Camera Management ---
   const {
-    videoRef, // This is now our HIDDEN master ref
+    videoRef, // Hidden master camera
     cameraActive,
     cameraLoading,
     cameraError,
@@ -16,23 +20,24 @@ const Monitor = () => {
     stopCamera
   } = useCamera();
 
-  // --- AI Detection Hooks ---
-  // Both hooks safely read from the hidden master video feed at the same time
-  const { latestCommand } = useGestureDetection(videoRef, cameraActive);
-  const { recognizedUser, faceScore } = useFaceRecognition(videoRef, cameraActive);
+  // --- AI Detection Hooks (Now controlled by Kill Switches) ---
+  const { latestCommand } = useGestureDetection(videoRef, cameraActive && enableGesture);
+  const { recognizedUser, faceScore } = useFaceRecognition(videoRef, cameraActive && enableFace);
 
-  const cameras = [
-    { id: 1, name: "Face Recognition CCTV" },
-    { id: 2, name: "Hand Gesture Feed" }
-  ];
+  // --- Display Screen Refs ---
+  const faceVideoRef = useRef(null);
+  const gestureVideoRef = useRef(null);
+  const expandedVideoRef = useRef(null);
 
-  // This simple function copies the video stream from the hidden master camera 
-  // to whatever visual screens you want to show on the dashboard.
-  const attachStream = (element) => {
-    if (element && videoRef.current && videoRef.current.srcObject) {
-      element.srcObject = videoRef.current.srcObject;
+  // Safely attach streams ONLY when the camera state changes (Fixes the flickering!)
+  useEffect(() => {
+    if (cameraActive && videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject;
+      if (faceVideoRef.current) faceVideoRef.current.srcObject = stream;
+      if (gestureVideoRef.current) gestureVideoRef.current.srcObject = stream;
+      if (expandedVideoRef.current) expandedVideoRef.current.srcObject = stream;
     }
-  };
+  }, [cameraActive, expandedCamera]);
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#1e1e1e', minHeight: '100vh', color: '#fff', position: 'relative' }}>
@@ -40,10 +45,32 @@ const Monitor = () => {
       {/* THE MASTER HIDDEN CAMERA FOR AI */}
       <video ref={videoRef} autoPlay playsInline muted style={{ display: 'none' }} />
 
-      <h2 style={{ borderBottom: '1px solid #333', paddingBottom: '10px' }}>Security Monitor</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
+        <h2>Security Monitor</h2>
+        
+        {/* --- AI TOGGLE CONTROLS --- */}
+        <div style={{ display: 'flex', gap: '15px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={enableFace} 
+              onChange={(e) => setEnableFace(e.target.checked)} 
+            />
+            Face ID AI
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={enableGesture} 
+              onChange={(e) => setEnableGesture(e.target.checked)} 
+            />
+            Gesture AI
+          </label>
+        </div>
+      </div>
 
-      {/* --- Camera Control ---*/}
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
+      {/* --- Camera Power Controls ---*/}
+      <div style={{ margin: '20px 0', display: 'flex', gap: '10px' }}>
         {!cameraActive ? (
           <button
             onClick={startCamera}
@@ -64,7 +91,7 @@ const Monitor = () => {
       </div>
 
       {/* --- GESTURE COMMAND NOTIFICATION --- */}
-      {latestCommand && (
+      {latestCommand && latestCommand !== "IDLE" && (
         <div style={{
           position: 'fixed', top: '20px', right: '40px', backgroundColor: '#4CAF50', color: '#000', padding: '15px 30px', borderRadius: '8px', fontWeight: 'bold', fontSize: '18px', boxShadow: '0px 0px 20px rgba(76, 175, 80, 0.6)', zIndex: 2000, animation: 'slideIn 0.3s ease'
         }}>
@@ -93,26 +120,38 @@ const Monitor = () => {
               <span>{expandedCamera.name} - LIVE</span>
               <button style={{ background: 'red', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '5px 10px' }}>Close</button>
             </div>
-            <video ref={attachStream} autoPlay playsInline muted style={{ width: '100%', height: 'auto', display: 'block', transform: 'scaleX(-1)' }} />
+            <video ref={expandedVideoRef} autoPlay playsInline muted style={{ width: '100%', height: 'auto', display: 'block', transform: 'scaleX(-1)' }} />
           </div>
         </div>
       )}
 
       {/* Grid View */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginTop: '20px' }}>
-        {cameras.map((cam) => (
-          <div 
-            key={cam.id} 
-            style={{ backgroundColor: '#000', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: '2px solid #333', transition: 'border-color 0.2s' }}
-            onClick={() => setExpandedCamera(cam)}
-          >
-            <div style={{ padding: '8px 12px', backgroundColor: '#222', fontSize: '14px', display: 'flex', justifyContent: 'space-between' }}>
-              <span>{cam.name}</span>
-              <span style={{ color: cameraActive ? '#4CAF50' : '#999' }}>● {cameraActive ? 'LIVE' : 'OFFLINE'}</span>
-            </div>
-            <video ref={attachStream} autoPlay playsInline muted style={{ width: '100%', height: '300px', objectFit: 'cover', transform: 'scaleX(-1)', backgroundColor: '#111' }} />
+        
+        {/* Camera 1: Face Feed */}
+        <div 
+          style={{ backgroundColor: '#000', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: '2px solid #333' }}
+          onClick={() => setExpandedCamera({ name: "Face Recognition CCTV" })}
+        >
+          <div style={{ padding: '8px 12px', backgroundColor: '#222', fontSize: '14px', display: 'flex', justifyContent: 'space-between' }}>
+            <span>Face Recognition CCTV {enableFace ? '(AI ON)' : '(AI OFF)'}</span>
+            <span style={{ color: cameraActive ? '#4CAF50' : '#999' }}>● {cameraActive ? 'LIVE' : 'OFFLINE'}</span>
           </div>
-        ))}
+          <video ref={faceVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '300px', objectFit: 'cover', transform: 'scaleX(-1)', backgroundColor: '#111' }} />
+        </div>
+
+        {/* Camera 2: Gesture Feed */}
+        <div 
+          style={{ backgroundColor: '#000', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: '2px solid #333' }}
+          onClick={() => setExpandedCamera({ name: "Hand Gesture Feed" })}
+        >
+          <div style={{ padding: '8px 12px', backgroundColor: '#222', fontSize: '14px', display: 'flex', justifyContent: 'space-between' }}>
+            <span>Hand Gesture Feed {enableGesture ? '(AI ON)' : '(AI OFF)'}</span>
+            <span style={{ color: cameraActive ? '#4CAF50' : '#999' }}>● {cameraActive ? 'LIVE' : 'OFFLINE'}</span>
+          </div>
+          <video ref={gestureVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '300px', objectFit: 'cover', transform: 'scaleX(-1)', backgroundColor: '#111' }} />
+        </div>
+
       </div>
 
       <style>{`

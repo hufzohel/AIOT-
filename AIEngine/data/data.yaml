@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['4-way-ac', 'Fan']
+
+roboflow:
+  workspace: cuong-tran-nguyen-manh
+  project: fan-ac_detection_cheat
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/cuong-tran-nguyen-manh/fan-ac_detection_cheat/dataset/3

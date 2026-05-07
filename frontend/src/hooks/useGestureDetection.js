@@ -8,7 +8,7 @@ import { useEffect, useState, useRef } from "react";
  * @param {boolean} enabled - Whether to actively detect (default: true)
  * @returns {Object} { latestCommand, isDetecting, error }
  */
-export default function useGestureDetection(videoRef, enabled = true) {
+export default function useGestureDetection(videoRef, enabled = true, actorId = 1) {
   const [latestCommand, setLatestCommand] = useState(null);
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState(null);
@@ -39,19 +39,24 @@ export default function useGestureDetection(videoRef, enabled = true) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            actorId: actorId, // <-- THIS WAS MISSING! FastAPI needs to know who is gesturing.
             frames: { cam_1: base64Image }
           })
         });
 
         const data = await response.json();
 
-        if (data.event === "COMMAND_ISSUED") {
+        // 200 OK from server
+        if (response.ok && data.event === "COMMAND_ISSUED") {
           console.log("🔥 Gesture detected:", data);
           setLatestCommand(`${data.action} → ${data.target}`);
           setError(null);
           
           // Auto-clear after 3 seconds
           setTimeout(() => setLatestCommand(null), 3000);
+        } else if (!response.ok) {
+          // If FastAPI still gets mad, log the exact reason so we aren't guessing
+          console.error("FastAPI Error:", data); 
         }
       } catch (err) {
         console.error("Gesture detection error:", err);
@@ -63,7 +68,7 @@ export default function useGestureDetection(videoRef, enabled = true) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [videoRef, enabled]);
+  }, [videoRef, enabled, actorId]);
 
   return {
     latestCommand,

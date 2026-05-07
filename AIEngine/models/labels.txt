@@ -1,0 +1,5 @@
+CASSETTE TYPE
+ceilling_fan
+CELLING TYPE
+fan
+ROOM AIR
