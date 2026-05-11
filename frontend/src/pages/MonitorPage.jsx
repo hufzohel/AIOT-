@@ -7,12 +7,12 @@ const Monitor = () => {
   const [expandedCamera, setExpandedCamera] = useState(null);
 
   // --- THE AI KILL SWITCHES ---
-  const [enableFace, setEnableFace] = useState(false); // Default OFF so it stops spamming 401
-  const [enableGesture, setEnableGesture] = useState(true); // Default ON for your testing
+  const [enableFace, setEnableFace] = useState(false); 
+  const [enableGesture, setEnableGesture] = useState(true); 
 
   // --- Camera Management ---
   const {
-    videoRef, // Hidden master camera
+    videoRef, 
     cameraActive,
     cameraLoading,
     cameraError,
@@ -20,22 +20,27 @@ const Monitor = () => {
     stopCamera
   } = useCamera();
 
-  // --- AI Detection Hooks (Now controlled by Kill Switches) ---
-  const { latestCommand } = useGestureDetection(videoRef, cameraActive && enableGesture);
+  // --- AI Detection Hooks ---
   const { recognizedUser, faceScore } = useFaceRecognition(videoRef, cameraActive && enableFace);
+  const { latestCommand, hudFrame } = useGestureDetection(videoRef, cameraActive && enableGesture);
 
   // --- Display Screen Refs ---
   const faceVideoRef = useRef(null);
   const gestureVideoRef = useRef(null);
   const expandedVideoRef = useRef(null);
 
-  // Safely attach streams ONLY when the camera state changes (Fixes the flickering!)
+  // BUG FIX 1: The Kill Switch (Prevents Ghost Frames)
   useEffect(() => {
     if (cameraActive && videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject;
       if (faceVideoRef.current) faceVideoRef.current.srcObject = stream;
       if (gestureVideoRef.current) gestureVideoRef.current.srcObject = stream;
       if (expandedVideoRef.current) expandedVideoRef.current.srcObject = stream;
+    } else {
+      // When camera turns off, force all video screens to go pure black
+      if (faceVideoRef.current) faceVideoRef.current.srcObject = null;
+      if (gestureVideoRef.current) gestureVideoRef.current.srcObject = null;
+      if (expandedVideoRef.current) expandedVideoRef.current.srcObject = null;
     }
   }, [cameraActive, expandedCamera]);
 
@@ -118,7 +123,7 @@ const Monitor = () => {
           <div style={{ width: '80%', maxWidth: '1000px', backgroundColor: '#000', borderRadius: '8px', overflow: 'hidden' }}>
             <div style={{ padding: '10px', backgroundColor: '#333', display: 'flex', justifyContent: 'space-between' }}>
               <span>{expandedCamera.name} - LIVE</span>
-              <button style={{ background: 'red', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '5px 10px' }}>Close</button>
+              <button style={{ background: 'red', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '5px 10px' }} onClick={() => setExpandedCamera(null)}>Close</button>
             </div>
             <video ref={expandedVideoRef} autoPlay playsInline muted style={{ width: '100%', height: 'auto', display: 'block', transform: 'scaleX(-1)' }} />
           </div>
@@ -149,7 +154,21 @@ const Monitor = () => {
             <span>Hand Gesture Feed {enableGesture ? '(AI ON)' : '(AI OFF)'}</span>
             <span style={{ color: cameraActive ? '#4CAF50' : '#999' }}>● {cameraActive ? 'LIVE' : 'OFFLINE'}</span>
           </div>
-          <video ref={gestureVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '300px', objectFit: 'cover', transform: 'scaleX(-1)', backgroundColor: '#111' }} />
+          
+          {/* BUG FIX 2: Removed scaleX(-1) from the img tag so it stops double-flipping */}
+          {enableGesture && hudFrame ? (
+            <img 
+              src={hudFrame} 
+              alt="Iron Man HUD" 
+              style={{ width: '100%', height: '300px', objectFit: 'cover' }} 
+            />
+          ) : (
+            <video 
+              ref={gestureVideoRef} 
+              autoPlay playsInline muted 
+              style={{ width: '100%', height: '300px', objectFit: 'cover'/*, transform: 'scaleX(-1)'*/, backgroundColor: '#111' }} 
+            />
+          )}
         </div>
 
       </div>

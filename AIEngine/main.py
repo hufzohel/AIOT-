@@ -77,6 +77,12 @@ class BulkPowerRequest(BaseModel):
     power: bool
 
 
+class DeviceUpdateRequest(BaseModel):
+    power: Optional[bool] = None
+    value: Optional[int] = None
+    actorId: Optional[int] = None
+
+
 class PermissionRequest(BaseModel):
     actorId: Optional[int] = None
     deviceTypes: List[str] = Field(default_factory=list)
@@ -323,6 +329,53 @@ async def bulk_power(request: BulkPowerRequest) -> Dict[str, Any]:
     )
     devices = await db_get_all_devices()
     return {"devices": devices}
+
+
+@app.patch("/api/devices/{device_id}")
+async def update_device(device_id: int, request: DeviceUpdateRequest) -> Dict[str, Any]:
+    pool = get_pool()
+    actor = await db_get_user_by_id(request.actorId) if request.actorId is not None else None
+
+    row = await pool.fetchrow("SELECT * FROM devices WHERE id = $1", device_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Không tìm thấy thiết bị")
+
+    device = row_to_device(row)
+    if not device.get("online"):
+        # If it's offline, ONLY allow the request if they are forcing it OFF
+        if request.power is False:
+            pass # Let the code continue and update the database
+        else:
+            raise HTTPException(status_code=400, detail="Thiết bị đang offline, chỉ có thể buộc tắt")
+
+    if actor and actor["role"] == "MEMBER":
+        all_devices = await db_get_all_devices()
+        allowed_ids = {d["id"] for d in get_allowed_devices(actor, all_devices)}
+        if device_id not in allowed_ids:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền điều khiển thiết bị này")
+
+    # Get new values (or keep existing if not provided)
+    new_power = request.power if request.power is not None else device.get("power")
+    new_value = request.value if request.value is not None else device.get("value")
+
+    updated = await pool.fetchrow(
+        "UPDATE devices SET power = $1, value = $2 WHERE id = $3 RETURNING *",
+        new_power, new_value, device_id,
+    )
+
+    actor_name = actor["name"] if actor else "System"
+    action_parts = []
+    if request.power is not None:
+        action_parts.append(f"{'Bật' if request.power else 'Tắt'}")
+    if request.value is not None:
+        action_parts.append(f"Giá trị: {request.value}")
+
+    await db_append_log(
+        user=actor_name,
+        action=f"Cập nhật {device['name']}: {', '.join(action_parts) if action_parts else 'không có thay đổi'}",
+        level="success",
+    )
+    return row_to_device(updated)
 
 
 @app.get("/api/users")

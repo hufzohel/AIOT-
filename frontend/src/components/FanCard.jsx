@@ -1,7 +1,7 @@
 import React from "react";
 import BaseDeviceCard from "./BaseCard";
 
-export default function FanCard({ device, onToggle, onSpeedChange, onSwingToggle }) {
+export default function FanCard({ device, onToggle, onSpeedChange }) {
   return (
     <BaseDeviceCard device={device} onToggle={onToggle}>
       
@@ -23,21 +23,6 @@ export default function FanCard({ device, onToggle, onSpeedChange, onSwingToggle
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Swing Control */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-500">Chế độ Swing</span>
-        <button
-          onClick={() => onSwingToggle(device.id, !device.swing)}
-          className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
-            device.swing
-              ? "bg-green-100 text-green-700"
-              : "bg-slate-100 text-slate-600"
-          }`}
-        >
-          {device.swing ? "BẬT" : "TẮT"}
-        </button>
       </div>
 
     </BaseDeviceCard>

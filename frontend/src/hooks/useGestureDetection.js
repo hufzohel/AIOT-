@@ -1,78 +1,92 @@
 import { useEffect, useState, useRef } from "react";
 
-/**
- * Hook for real-time gesture detection
- * Captures frames from video ref and sends to /api/gesture/process
- * 
- * @param {React.RefObject} videoRef - Reference to video element
- * @param {boolean} enabled - Whether to actively detect (default: true)
- * @returns {Object} { latestCommand, isDetecting, error }
- */
 export default function useGestureDetection(videoRef, enabled = true, actorId = 1) {
   const [latestCommand, setLatestCommand] = useState(null);
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState(null);
+  const [hudFrame, setHudFrame] = useState(null); 
   const canvasRef = useRef(null);
-  const intervalRef = useRef(null);
 
   useEffect(() => {
-    if (!enabled || !videoRef?.current) return;
+    let isActive = true; 
+
+    if (!enabled || !videoRef?.current) {
+      setHudFrame(null);
+      setLatestCommand(null);
+      return;
+    }
 
     const canvas = document.createElement("canvas");
     canvasRef.current = canvas;
     const ctx = canvas.getContext("2d");
 
-    // Capture and send frames every 500ms
-    intervalRef.current = setInterval(async () => {
+    const captureFrame = async () => {
+      if (!isActive || !videoRef.current) return;
+
       const video = videoRef.current;
 
-      if (!video || video.readyState !== 4) return;
-
-      try {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const base64Image = canvas.toDataURL("image/jpeg", 0.8);
-
-        setIsDetecting(true);
-        const response = await fetch("/api/gesture/process", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            actorId: actorId, // <-- THIS WAS MISSING! FastAPI needs to know who is gesturing.
-            frames: { cam_1: base64Image }
-          })
-        });
-
-        const data = await response.json();
-
-        // 200 OK from server
-        if (response.ok && data.event === "COMMAND_ISSUED") {
-          console.log("🔥 Gesture detected:", data);
-          setLatestCommand(`${data.action} → ${data.target}`);
-          setError(null);
+      if (video.readyState === 4) {
+        try {
+          // ⚡ THE SILVER BULLET: DOWNSCALE BEFORE ENCODING
+          // Shrink the massive webcam feed to a lightweight 640px wide format
+          const TARGET_WIDTH = 640;
+          const scale = TARGET_WIDTH / video.videoWidth;
           
-          // Auto-clear after 3 seconds
-          setTimeout(() => setLatestCommand(null), 3000);
-        } else if (!response.ok) {
-          // If FastAPI still gets mad, log the exact reason so we aren't guessing
-          console.error("FastAPI Error:", data); 
+          canvas.width = TARGET_WIDTH;
+          canvas.height = video.videoHeight * scale;
+          
+          // Draw the smaller image
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // Compress it at 50% quality (Fastest network transport)
+          const base64Image = canvas.toDataURL("image/jpeg", 0.5);
+
+          setIsDetecting(true);
+          const response = await fetch("/api/gesture/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              actorId: actorId, 
+              frames: { cam_1: base64Image }
+            })
+          });
+
+          const data = await response.json();
+
+          if (isActive && response.ok) {
+            if (data.drawn_frame) {
+              setHudFrame(`data:image/jpeg;base64,${data.drawn_frame}`);
+            }
+
+            if (data.event === "COMMAND_ISSUED") {
+              setLatestCommand(`${data.action} → ${data.target}`);
+              setError(null);
+              setTimeout(() => {
+                if (isActive) setLatestCommand(null);
+              }, 3000);
+            }
+          }
+        } catch (err) {
+          console.error("Gesture detection error:", err);
+          if (isActive) {
+            setError(err.message);
+            setIsDetecting(false);
+          }
         }
-      } catch (err) {
-        console.error("Gesture detection error:", err);
-        setError(err.message);
-        setIsDetecting(false);
       }
-    }, 500);
+
+      // Proceed to the next frame
+      if (isActive) {
+        setTimeout(captureFrame, 80);
+      }
+    };
+
+    captureFrame();
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      isActive = false;
     };
   }, [videoRef, enabled, actorId]);
 
-  return {
-    latestCommand,
-    isDetecting,
-    error
-  };
+  return { latestCommand, isDetecting, error, hudFrame };
 }

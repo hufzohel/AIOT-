@@ -26,7 +26,7 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
 
   const showToast = (type, message) => setToast({ open: true, type, message });
 
-  const { devices, toggleDevice, updateValue, updateSwing, updateSleep } = useDeviceSync(targetUserId);
+  const { devices, toggleDevice, updateValue } = useDeviceSync(targetUserId);
 
   const handleToggle = async (id) => {
     const target = devices.find((item) => item.id === id);
@@ -37,14 +37,22 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
       return;
     }
     
+    // --- THE FIX: Allow forcing offline devices OFF, but block turning them ON ---
     if (target.online === false) {
-      showToast("error", `Thiết bị "${target.name}" đang offline nên không thể bật/tắt.`);
-      return;
+      if (target.power === false) {
+        showToast("error", `Thiết bị "${target.name}" đang offline nên không thể bật.`);
+        return; 
+      } else {
+        showToast("info", `Đang buộc tắt "${target.name}" để đồng bộ hệ thống.`);
+        // Notice there is NO 'return' here. We let the code continue so it turns off!
+      }
     }
 
     try {
       await toggleDevice(id);
-      showToast("success", `Đã gửi lệnh cập nhật trạng thái cho "${target.name}".`);
+      if (target.online !== false) {
+        showToast("success", `Đã gửi lệnh cập nhật trạng thái cho "${target.name}".`);
+      }
     } catch (error) {
       showToast("error", "Không thể thay đổi trạng thái thiết bị.");
     }
@@ -67,8 +75,9 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
     });
   }, [devices, search, filter]);
 
+  // FIXED: Rely strictly on 'device.power' mapped from the DB
   const onlineCount = (devices || []).filter((device) => device.online !== false).length; 
-  const onCount = (devices || []).filter((device) => device.status || device.power).length; 
+  const onCount = (devices || []).filter((device) => device.power === true).length; 
 
   return (
     <div className="space-y-6">
@@ -150,8 +159,7 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
                 key={device.id}
                 device={device}
                 onToggle={() => handleToggle(device.id)}
-                onSpeedChange={updateValue}   
-                onSwingToggle={updateSwing}   
+                onSpeedChange={updateValue}
                 readOnly={readOnly} 
               />
             );
@@ -162,9 +170,7 @@ export default function DevicesPage({ userId: propUserId, readOnly = false }) {
                 key={device.id}
                 device={device}
                 onToggle={() => handleToggle(device.id)}
-                onTempChange={updateValue}    
-                onSwingToggle={updateSwing}  
-                onSleepToggle={updateSleep}
+                onTempChange={updateValue}
                 readOnly={readOnly}
               />
             );
