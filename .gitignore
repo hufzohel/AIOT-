@@ -18,9 +18,6 @@ Thumbs.db
 backend/.venv/
 backend/.env
 
-# Optional
-requirements.txt
-
 node_modules/
 **/node_modules/
 # ========================
