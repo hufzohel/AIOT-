@@ -30,25 +30,16 @@ function MemberRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  // FORCE UPPERCASE & BOUNCE TO NEUTRAL GROUND
-  if (user?.role?.toUpperCase() !== "USER") return <Navigate to="/devices" replace />;
+  
+  const role = user?.role?.toUpperCase();
+  
+  // THE FIX: Allow both "MEMBER" and "USER" to enter the dashboard
+  if (role !== "MEMBER" && role !== "USER") {
+    return <Navigate to="/devices" replace />;
+  }
+  
   return children;
 }
-
-// function MemberRoute({ children }) {
-//   const { user, loading } = useAuth();
-//   if (loading) return null;
-//   if (!user) return <Navigate to="/login" replace />;
-  
-//   const role = user?.role?.toUpperCase();
-  
-//   // THE FIX: Allow both "MEMBER" and "USER" to enter the dashboard
-//   if (role !== "MEMBER" && role !== "USER") {
-//     return <Navigate to="/devices" replace />;
-//   }
-  
-//   return children;
-// }
 
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
