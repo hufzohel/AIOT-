@@ -6,6 +6,7 @@ requests>=2.32.0
 python-multipart>=0.0.9
 asyncpg>=0.30.0
 python-dotenv>=1.0.0
+httpx>=0.27.0
 ai-edge-litert
 torch>=2.7.0
 ultralytics>=8.0.0

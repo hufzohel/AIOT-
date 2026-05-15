@@ -66,3 +66,14 @@ Thumbs.db
 *.log
 *.tmp
 *.swp
+
+# Virtual Environment
+myenv/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+runs/detect/
+
