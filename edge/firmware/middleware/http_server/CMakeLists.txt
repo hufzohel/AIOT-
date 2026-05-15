@@ -1,3 +1,4 @@
-idf_component_register(SRCS "http_server.c"
+idf_component_register(SRCS "http_server.c" "../../driver/fan/fan.c"
                     INCLUDE_DIRS "."
-                    REQUIRES esp_http_server json esp_driver_gpio)
+                    REQUIRES esp_http_server json driver fan)
+
