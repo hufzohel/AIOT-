@@ -13,18 +13,24 @@ static void data_collector_task(void *pvParameters) {
     ESP_LOGI(TAG, "Sensor collection task started.");
 
     while (1) {
+        // 1. Report Status
+        if (wifi_is_connected()) {
+            ESP_LOGI(TAG, "[WIFI]: Connected");
+        } else {
+            ESP_LOGI(TAG, "[WIFI]: Connecting...");
+        }
+
+        // 2. Read Sensors
         esp_err_t err = dht11_read(&data);
         if (err == ESP_OK) {
-            ESP_LOGI(TAG, "Temp: %.1f, Hum: %.1f", data.temperature, data.humidity);
+            ESP_LOGI(TAG, "Temp: %.1f°C | Hum: %.1f%%", data.temperature, data.humidity);
             
-            // Send to backend if WiFi is connected
+            // 3. Send to backend
             if (wifi_is_connected()) {
                 http_post_sensor_data(data.temperature, data.humidity);
-            } else {
-                ESP_LOGW(TAG, "Skipped sending: Wi-Fi disconnected.");
             }
         } else {
-            ESP_LOGW(TAG, "Failed to read sensor: %s", esp_err_to_name(err));
+            ESP_LOGW(TAG, "Sensor read error: %s", esp_err_to_name(err));
         }
         
         // Wait 5 minutes

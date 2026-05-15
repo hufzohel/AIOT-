@@ -2,7 +2,7 @@
 #include "esp_http_client.h"
 #include "esp_log.h"
 
-#define SERVER_URL "http://192.168.1.200:5000/api/sensors/update" 
+#define SERVER_URL "http://192.168.1.5:8000/api/sensors/update" 
 
 esp_err_t http_post_sensor_data(float temp, float hum) {
     char post_data[128];

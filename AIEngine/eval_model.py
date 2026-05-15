@@ -7,7 +7,9 @@ from ultralytics import YOLO
 # CONFIGURATION
 # ==========================================
 # Point this to your surviving V2 PyTorch brain!
-MODEL_PATH = r"F:\Bach_khoa\HKCQ\HK252\DADN\CODE\AIOT-\runs\detect\train-2\weights\best.pt"
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "runs" / "detect" / "cheat-2" / "weights" / "best.pt"
 TEST_FOLDER = "test_images" # Point this to your test images!
 CONFIDENCE_THRESHOLD = 0.50
 # ==========================================

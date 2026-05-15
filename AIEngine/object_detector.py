@@ -1,11 +1,17 @@
 from ultralytics import YOLO
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
 
 class DynamicDetector:
-    def __init__(self, model_path="your_model_path_here.pt"):
+    def __init__(self, model_path=None):
+        if model_path is None:
+            model_path = BASE_DIR.parent / "runs" / "detect" / "cheat-2" / "weights" / "best.pt"
+            
         print("🤖 Loading YOLOv8 Vision Engine...")
         print(f"   Model path: {model_path}")
         try:
-            self.model = YOLO(model_path)
+            self.model = YOLO(str(model_path))
             print(f"✅ Vision Engine Online. Classes: {self.model.names}")
         except Exception as e:
             print(f"❌ FAILED TO LOAD MODEL: {e}")

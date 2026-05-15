@@ -6,8 +6,8 @@ from hand_tracker import HandTracker
 
 class IronManHUD_Engine:
     def __init__(self):
-        # REPLACE THIS with your actual YOLO path
-        self.detector = DynamicDetector(model_path=r"F:\Bach_khoa\HKCQ\HK252\DADN\CODE\AIOT-\runs\detect\cheat-2\weights\best.pt") 
+        # Dynamically point to the project-relative weights
+        self.detector = DynamicDetector()
         self.tracker = HandTracker()
         
         # --- STATE MACHINE ---

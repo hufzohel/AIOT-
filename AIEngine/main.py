@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 from contextlib import asynccontextmanager
 from copy import deepcopy
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from database import create_pool, close_pool, get_pool, record_to_dict, records_to_list
 from face_engine import FaceEngine, FaceEngineError
+from notifier import push_command_to_esp32
 from routers import gesture  # Import the new socket
 from routers import temperature
 
@@ -87,6 +89,11 @@ class PermissionRequest(BaseModel):
     actorId: Optional[int] = None
     deviceTypes: List[str] = Field(default_factory=list)
     deviceIds: List[int] = Field(default_factory=list)
+
+
+class SensorUpdateRequest(BaseModel):
+    temperature: float
+    humidity: float
 
 
 class FaceRegisterRequest(BaseModel):
@@ -217,6 +224,47 @@ def average_embeddings(items: List[np.ndarray]) -> np.ndarray:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+@app.post("/api/sensors/update")
+async def update_sensors(request: SensorUpdateRequest) -> Dict[str, Any]:
+    pool = get_pool()
+    
+    # 1. Log the update for the dashboard
+    await db_append_log(
+        user="ESP32-Edge",
+        action=f"Cập nhật cảm biến: T={request.temperature}°C, H={request.humidity}%",
+        level="info"
+    )
+    
+    # 2. Save to sensor_data for dashboard (using default user_id=1 for the system)
+    now_dt = datetime.now()
+    now_time = now_dt.strftime("%H:%M")
+    
+    # Generate fake outside temperature: indoor +/- 2-5 degrees
+    outside_temp = round(request.temperature + (np.random.rand() * 6 - 3), 1)
+    
+    await pool.execute(
+        "INSERT INTO sensor_data (user_id, time, temperature, humidity, light, outside_temperature) VALUES ($1, $2, $3, $4, $5, $6)",
+        1, now_time, request.temperature, request.humidity, 0.0, outside_temp
+    )
+
+    # 3. Append to CSV for AI training
+    csv_path = BASE_DIR / "data" / "temp_humid_training_data.csv"
+    try:
+        with open(csv_path, mode='a', newline='') as f:
+            writer = csv.writer(f)
+            # Match header: timestamp,temperature,humidity,outside_temperature
+            writer.writerow([
+                now_dt.strftime("%Y/%m/%d %H:%M:%S"),
+                request.temperature,
+                request.humidity,
+                outside_temp
+            ])
+    except Exception as e:
+        print(f"⚠️ Error writing to CSV: {e}")
+    
+    return {"status": "success", "message": "Dữ liệu đã được lưu"}
+
+
 @app.get("/api/health")
 async def health() -> Dict[str, str]:
     return {"status": "ok"}
@@ -302,6 +350,11 @@ async def toggle_device(device_id: int, request: ToggleRequest) -> Dict[str, Any
         action=f"{'Bật' if next_power else 'Tắt'} {device['name']}",
         level="success" if next_power else "info",
     )
+
+    # 🚀 REAL-TIME PUSH: Trigger hardware interrupt on ESP32
+    if device["type"] == "fan":
+        asyncio.create_task(push_command_to_esp32(device["type"], next_power, next_value))
+
     return row_to_device(updated)
 
 
@@ -362,6 +415,11 @@ async def update_device(device_id: int, request: DeviceUpdateRequest) -> Dict[st
         "UPDATE devices SET power = $1, value = $2 WHERE id = $3 RETURNING *",
         new_power, new_value, device_id,
     )
+
+    # 🚀 REAL-TIME PUSH: Trigger hardware interrupt on ESP32
+    device_updated = row_to_device(updated)
+    if device_updated["type"] == "fan":
+        asyncio.create_task(push_command_to_esp32(device_updated["type"], new_power, new_value))
 
     actor_name = actor["name"] if actor else "System"
     action_parts = []

@@ -22,14 +22,6 @@ static void heartbeat_task(void *pvParameters) {
         led_state = !led_state;
         gpio_set_level(HEARTBEAT_LED, led_state);
 
-        // Get system health stats
-        uint32_t uptime_s = (uint32_t)(esp_timer_get_time() / 1000000);
-        uint32_t free_heap = esp_get_free_heap_size();
-        
-        // Log the heartbeat with uptime and memory usage
-        ESP_LOGI(TAG, "[BEAT] Uptime: %u s | Free Heap: %u bytes", 
-                 uptime_s, free_heap);
-
         // Wait 1 second
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
