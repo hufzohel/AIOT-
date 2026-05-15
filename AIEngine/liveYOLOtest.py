@@ -5,7 +5,11 @@ def boot_iron_man_hud():
     print("🤖 Booting PyTorch Vision Engine...")
     
     # 1. Load your surviving PyTorch brain
-    model = YOLO(r"F:\Bach_khoa\HKCQ\HK252\DADN\CODE\AIOT-\runs\detect\cheat-2\weights\best.pt")
+    from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "runs" / "detect" / "cheat-2" / "weights" / "best.pt"
+
+model = YOLO(str(MODEL_PATH))
 
     print("🎥 Opening Webcam (Press 'q' to quit)...")
     
