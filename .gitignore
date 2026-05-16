@@ -33,6 +33,8 @@ frontend/.vite/
 .env
 .env.local
 .env.production
+AIEngine/.env
+gesture_fan_mediapipe/.env
 
 # ========================
 # AI Models (download via tools/download_models.py)
