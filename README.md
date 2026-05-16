@@ -7,10 +7,10 @@ Backend FastAPI + PostgreSQL, Frontend React/Vite.
 
 | Thành phần | Công nghệ | Port |
 |---|---|---|
-| **Backend** | FastAPI + asyncpg + PostgreSQL | `localhost:5000` |
+| **Backend** | FastAPI + asyncpg + PostgreSQL | `localhost:8000` |
 | **Frontend** | React + Vite + Tailwind CSS | `localhost:3000` |
 | **Database** | PostgreSQL 15+ | `localhost:5432` |
-| **Face ID** | OpenCV YuNet + SFace (tùy chọn) | — |
+| **AI Engine** | Gesture + Face + Temp Prediction | `localhost:8000` |
 
 ## Tài khoản demo
 
@@ -40,33 +40,34 @@ psql -U postgres -c "CREATE DATABASE smart_home;"
 
 **Import schema + data:**
 ```bash
-psql -U postgres -d smart_home -f backend/db/backup.sql
+psql -U postgres -d smart_home -f db/backup.sql
 ```
 
-### 2. Backend
+### 2. Backend (AIEngine + AI Models)
 
 ```bash
-cd backend
-
-# Tạo virtual environment (khuyên dùng)
-python -m venv .venv
+# Activate venv từ gesture_fan_mediapipe
+cd gesture_fan_mediapipe
 # Windows
 .venv\Scripts\activate
 # macOS/Linux
 source .venv/bin/activate
 
-# Cài dependencies
+# Cài dependencies AI
+cd ../AIEngine
 pip install -r requirements.txt
 
 # Cấu hình database (sửa tuỳ thuộc vào URL sử dụng)
-# File backend/.env — mặc định:
+# File AIEngine/.env — mặc định:
 # DATABASE_URL=postgresql://postgres:postgres@localhost:5432/smart_home
 
-# (Tùy chọn) Tải models cho Face ID
-python tools/download_models.py
+# (Tùy chọn) Tải models cho Face Detection
+cd ../AIEngine/tools
+python download_models.py
+cd ..
 
-# Chạy server
-uvicorn main:app --reload --port 5000
+# Chạy FastAPI server
+python -m uvicorn main:app --reload --port 8000
 ```
 
 ### 3. Frontend
@@ -82,19 +83,28 @@ Mở trình duyệt tại `http://localhost:3000`
 ## Cấu trúc thư mục
 
 ```
-smart_home/
-├── backend/
-│   ├── main.py              # FastAPI app — tất cả API endpoints
-│   ├── database.py          # Kết nối PostgreSQL (asyncpg pool)
-│   ├── face_engine.py       # OpenCV face detection/recognition
-│   ├── requirements.txt     # Python dependencies
-│   ├── .env                 # DATABASE_URL config
-│   ├── data_seed.json       # Dữ liệu mẫu (backup, không dùng runtime)
-│   ├── db/
-│   │   └── backup.sql       # Schema + seed data cho PostgreSQL
-│   ├── models/              # AI models (gitignored, tải qua script)
+AIOT/
+├── AIEngine/                    # FastAPI backend + AI models
+│   ├── main.py                  # FastAPI app — tất cả API endpoints
+│   ├── database.py              # Kết nối PostgreSQL (asyncpg pool)
+│   ├── face_engine.py           # OpenCV face detection/recognition (YuNet)
+│   ├── gesture_engine.py        # MediaPipe gesture detection
+│   ├── gesture_recognizer.task  # MediaPipe config
+│   ├── hud_engine.py            # YOLO object detection cho devices
+│   ├── requirements.txt         # Python dependencies
+│   ├── .env                     # DATABASE_URL config
+│   ├── models/                  # AI models (YuNet, SFace)
 │   └── tools/
-│       └── download_models.py
+│       └── download_models.py   # Tải models face detection
+├── db/                          # Database
+│   └── backup.sql               # Schema + seed data cho PostgreSQL
+├── gesture_fan_mediapipe/       # Virtual environment + gesture control
+│   ├── .venv/                   # Python venv (PHẢI giữ lại)
+│   └── gesture_fan_control.py
+├── temperature_prediction/      # GRU model dự báo nhiệt độ
+│   ├── gru_model.py
+│   ├── temperature_prediction.py
+│   └── dataset.py
 ├── frontend/
 │   ├── index.html
 │   ├── package.json
@@ -135,18 +145,20 @@ smart_home/
 |---|---|---|
 | POST | `/api/login` | Đăng nhập bằng email/password |
 
-### Sensors
+### Devices & Control
 | Method | Route | Mô tả |
 |---|---|---|
-| GET | `/api/sensors?userId=X` | Dữ liệu cảm biến (temp, humidity, light) |
-
-### Devices
-| Method | Route | Mô tả |
-|---|---|---|
-| GET | `/api/devices` | Tất cả thiết bị (ADMIN) |
 | GET | `/api/devices?userId=X` | Thiết bị được cấp quyền cho user |
 | POST | `/api/devices/:id/toggle` | Bật/tắt thiết bị |
-| POST | `/api/devices/bulk-power` | Bật/tắt tất cả (ADMIN only) |
+| PATCH | `/api/devices/:id` | Cập nhật giá trị thiết bị (temperature, fan speed) |
+| GET | `/api/sensors?userId=X` | Dữ liệu cảm biến (temp, humidity, light) |
+
+### AI Detection (Real-time từ webcam)
+| Method | Route | Mô tả |
+|---|---|---|
+| GET | `/api/gesture/detect` | Phát hiện gesture (WebSocket) |
+| GET | `/api/face/detect` | Phát hiện khuôn mặt (WebSocket) |
+| POST | `/api/temperature/predict` | Dự báo nhiệt độ |
 
 ### Users
 | Method | Route | Mô tả |
@@ -161,15 +173,6 @@ smart_home/
 | GET | `/api/logs` | Nhật ký hệ thống |
 | GET | `/api/health` | Health check |
 
-### Face ID (tùy chọn)
-| Method | Route | Mô tả |
-|---|---|---|
-| GET | `/api/face/health` | Kiểm tra model sẵn sàng |
-| POST | `/api/face/register` | Đăng ký Face ID (5 ảnh) |
-| POST | `/api/face/update` | Cập nhật Face ID |
-| POST | `/api/face/disable` | Tắt Face ID |
-| POST | `/api/face/login` | Đăng nhập bằng Face ID |
-
 ## Phân quyền
 
 - **ADMIN** — xem danh sách MEMBER, xem dashboard/thiết bị từng MEMBER, phân quyền, điều khiển toàn bộ thiết bị, xem logs
@@ -177,7 +180,7 @@ smart_home/
 
 ## Cấu hình
 
-Tất cả config nằm trong `backend/.env`:
+Tất cả config nằm trong `AIEngine/.env`:
 
 ```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/smart_home
@@ -185,9 +188,31 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/smart_home
 
 Sửa thông số cho phù hợp với môi trường của bạn.
 
-## Ghi chú
+## Tính năng AI
 
-- Face ID là tính năng tùy chọn — người dùng luôn có thể đăng nhập bằng mật khẩu
-- Nếu `GET /api/face/health` báo lỗi model, chạy: `python tools/download_models.py`
-- Camera hoạt động tốt nhất trên `localhost` (HTTPS required cho domain khác)
-- `data_seed.json` chỉ là bản backup dữ liệu mẫu, backend không dùng file này khi chạy
+### 1. Gesture Detection (Gesture Control)
+- **MediaPipe hand tracking** phát hiện cử chỉ từ webcam
+- Kiểm soát thiết bị (quạt, đèn) bằng cử chỉ mở tay
+- Endpoint WebSocket: `GET /api/gesture/detect`
+- Venv nằm tại: `gesture_fan_mediapipe/.venv` (PHẢI giữ lại)
+
+### 2. Face Detection & Recognition
+- **OpenCV YuNet + SFace** phát hiện khuôn mặt real-time
+- Tùy chọn: Đăng nhập bằng Face ID
+- Models được tải qua: `AIEngine/tools/download_models.py`
+- Endpoint WebSocket: `GET /api/face/detect`
+
+### 3. Temperature Prediction
+- **GRU Neural Network** dự báo nhiệt độ dựa trên lịch sử
+- Folder: `temperature_prediction/`
+- Endpoint: `POST /api/temperature/predict`
+
+## Ghi chú quan trọng
+
+- **Venv location**: Nằm tại `gesture_fan_mediapipe/.venv` — PHẢI giữ lại, xóa sẽ làm hỏng project
+- **Database import**: Sử dụng `db/backup.sql` ở thư mục gốc, KHÔNG phải `backend/db/`
+- **Port FastAPI**: Chạy trên port 8000, frontend proxy tự động route `/api/*`
+- **Models AI**: Face detection models tải qua `AIEngine/tools/download_models.py`
+- **Camera**: Hoạt động tốt nhất trên `localhost` (HTTPS required cho domain khác)
+- Nếu gesture detection không hoạt động, kiểm tra webcam permissions
+- Nếu face detection báo lỗi, chạy: `cd AIEngine && python tools/download_models.py`
