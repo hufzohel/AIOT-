@@ -18,8 +18,12 @@ export default function DashboardPage({ userId: propUserId }) {
     if (!targetUserId) return;
     api.get("/sensors", { params: { userId: targetUserId } }).then((res) => setSensors(res.data)).catch(() => setSensors(null));
     api.get("/devices", { params: { userId: targetUserId } }).then((res) => setDevices(res.data)).catch(() => setDevices([]));
+    
     setPredictionLoading(true);
-    api.get("/temperature/predict").then((res) => setPrediction(res.data)).catch((err) => console.error("Prediction failed:", err)).finally(() => setPredictionLoading(false));
+    api.get("/temperature/predict")
+       .then((res) => setPrediction(res.data))
+       .catch((err) => console.error("Prediction failed:", err))
+       .finally(() => setPredictionLoading(false));
   }, [targetUserId]);
 
   const latest = useMemo(() => {
@@ -51,23 +55,27 @@ export default function DashboardPage({ userId: propUserId }) {
 
       {sensors ? (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <SensorChart data={sensors} title="Nhiệt độ & độ ẩm" />
+          <SensorChart data={sensors} predictions={prediction?.predictions_4hr} title="Nhiệt độ & độ ẩm" />
           <LightChart data={sensors.light} />
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400">Không có dữ liệu cảm biến cho người dùng này.</div>
       )}
 
-      {/* AI Prediction Card */}
-      <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white">
-        <h3 className="text-lg font-semibold">🤖 AI Temperature Prediction</h3>
+      {/* AI Prediction Card - NOW SHOWS ALL 4 HOURS */}
+      <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white shadow-lg">
+        <h3 className="text-lg font-semibold mb-3">🤖 AI Dự báo 4 Giờ Tới</h3>
         {predictionLoading ? (
           <p>Loading prediction...</p>
-        ) : prediction ? (
-          <>
-            <p className="text-4xl font-bold mt-2">{prediction.prediction_celsius}°C</p>
-            <p className="text-sm mt-1 opacity-90">{prediction.message}</p>
-          </>
+        ) : prediction?.predictions_4hr ? (
+          <div className="flex flex-wrap gap-4">
+            {prediction.predictions_4hr.map((temp, idx) => (
+              <div key={idx} className="bg-white/20 px-5 py-3 rounded-xl text-center min-w-[100px]">
+                <p className="text-sm opacity-90 pb-1">+{idx + 1} Giờ</p>
+                <p className="text-2xl font-bold">{temp}°C</p>
+              </div>
+            ))}
+          </div>
         ) : (
           <p className="text-red-300">Failed to load prediction</p>
         )}

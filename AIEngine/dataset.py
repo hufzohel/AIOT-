@@ -109,8 +109,9 @@ class TemperatureDataset(Dataset):
             self.X.append(sequence)
             self.y.append(target)
             
-        self.X = torch.tensor(self.X, dtype=torch.float32)
-        self.y = torch.tensor(self.y, dtype=torch.float32).unsqueeze(1)
+        # THE FIX: Squish the numbers so the GRU doesn't overload
+        self.X = torch.tensor(self.X, dtype=torch.float32) / 100.0
+        self.y = torch.tensor(self.y, dtype=torch.float32).unsqueeze(1) / 100.0
 
     def __len__(self):
         return len(self.X)
