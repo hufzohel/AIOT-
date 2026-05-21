@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Camera, CameraOff, CheckCircle2, RefreshCcw, Save, ScanFace, Trash2 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import api from "../lib/api";
@@ -13,6 +13,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState({ open: false, type: "info", message: "" });
   const { videoRef, cameraActive, cameraLoading, cameraError, startCamera, stopCamera, captureFrame } = useCamera();
+  
+  // 🚀 NEW: State to hold the OpenCV Math Frame
+  const [hudFrame, setHudFrame] = useState(null);
 
   const guideSteps = useMemo(
     () => [
@@ -28,6 +31,46 @@ export default function ProfilePage() {
     setToast({ open: true, type, message });
   };
 
+  // 🚀 NEW: Fetch the HUD frame so you can see your landmarks
+  useEffect(() => {
+    if (!cameraActive || !videoRef.current) {
+      setHudFrame(null);
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    let isFetching = false;
+
+    const interval = setInterval(async () => {
+      // Prevent network pile-up if the backend is thinking
+      if (isFetching || !videoRef.current || videoRef.current.readyState !== 4) return;
+      
+      isFetching = true;
+      try {
+        canvas.width = videoRef.current.videoWidth;
+        canvas.height = videoRef.current.videoHeight;
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const base64Image = canvas.toDataURL("image/jpeg", 0.8);
+
+        // We use the login route purely to extract the HUD image logic we built
+        const res = await api.post("/face/login", { image: base64Image });
+        if (res.data?.hudImage) {
+          setHudFrame(res.data.hudImage);
+        }
+      } catch (error) {
+        // If it throws an error but still returns the HUD, catch it
+        if (error.response?.data?.hudImage) {
+          setHudFrame(error.response.data.hudImage);
+        }
+      } finally {
+        isFetching = false;
+      }
+    }, 150); // 🚀 150ms = Super smooth FPS
+
+    return () => clearInterval(interval);
+  }, [cameraActive, videoRef]);
+
   const captureSample = () => {
     try {
       if (!cameraActive) {
@@ -38,6 +81,7 @@ export default function ProfilePage() {
         showToast("error", `Bạn đã chụp đủ ${SAMPLE_TARGET} ảnh mẫu.`);
         return;
       }
+      // This grabs the RAW frame from the hidden video, NOT the drawn HUD! Perfect.
       const image = captureFrame();
       setSamples((prev) => [...prev, image]);
       showToast("success", `Đã chụp ${samples.length + 1}/${SAMPLE_TARGET} ảnh mẫu.`);
@@ -104,9 +148,26 @@ export default function ProfilePage() {
           </div>
 
           <div className="aspect-video rounded-2xl overflow-hidden bg-slate-900 relative">
-            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            {/* RAW VIDEO: Kept active but hidden behind the HUD so captureFrame() gets a clean image */}
+            <video 
+              ref={videoRef} 
+              autoPlay playsInline muted 
+              className="absolute inset-0 w-full h-full object-cover" 
+              style={{ transform: "scaleX(-1)", opacity: hudFrame ? 0 : 1 }} 
+            />
+            
+            {/* HUD OVERLAY: Displays the OpenCV math from the backend */}
+            {hudFrame && (
+              <img 
+                src={hudFrame} 
+                alt="AI Alignment HUD" 
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ transform: "scaleX(-1)" }}
+              />
+            )}
+
             {!cameraActive && (
-              <div className="absolute inset-0 flex items-center justify-center text-slate-300 text-sm px-6 text-center">
+              <div className="absolute inset-0 flex items-center justify-center text-slate-300 text-sm px-6 text-center z-10 bg-slate-900">
                 Bật camera để xem preview trực tiếp và chụp ảnh mẫu.
               </div>
             )}

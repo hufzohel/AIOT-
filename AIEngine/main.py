@@ -40,9 +40,23 @@ def get_face_engine() -> FaceEngine:
         raise
 
 
+# Add this helper function right above your lifespan function
+async def load_faiss_index():
+    engine = get_face_engine()
+    pool = get_pool()
+    rows = await pool.fetch("SELECT id, face_auth FROM users")
+    for row in rows:
+        user_id = row["id"]
+        face_auth = parse_face_auth(row.get("face_auth"))
+        if face_auth.get("enabled") and face_auth.get("embedding"):
+            emb = np.array(face_auth["embedding"], dtype=np.float32)
+            engine.add_or_update_face_in_db(user_id, emb)
+    print(f"✅ FAISS Vector DB loaded with {engine.index.ntotal} users!")
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     await create_pool()
+    await load_faiss_index() # 🚀 Load DB into RAM
     yield
     await close_pool()
 
@@ -545,6 +559,7 @@ async def face_register(request: FaceRegisterRequest) -> Dict[str, Any]:
     await db_append_log(user=user["name"], action="Đăng ký Face ID", level="success")
 
     updated = await db_get_user_by_id(request.userId)
+    engine.add_or_update_face_in_db(request.userId, merged)
     return {"message": "Đăng ký Face ID thành công", "user": sanitize_user(updated)}
 
 
@@ -580,6 +595,7 @@ async def face_update(request: FaceRegisterRequest) -> Dict[str, Any]:
     await db_append_log(user=user["name"], action="Cập nhật Face ID", level="success")
 
     updated = await db_get_user_by_id(request.userId)
+    engine.add_or_update_face_in_db(request.userId, merged)
     return {"message": "Cập nhật Face ID thành công", "user": sanitize_user(updated)}
 
 
@@ -604,48 +620,46 @@ async def face_disable(request: FaceDisableRequest) -> Dict[str, Any]:
     await db_append_log(user=user["name"], action="Tắt Face ID", level="info")
 
     updated = await db_get_user_by_id(request.userId)
+    get_face_engine().remove_face_from_db(request.userId)
     return {"message": "Đã tắt Face ID", "user": sanitize_user(updated)}
 
 
 @app.post("/api/face/login")
 async def face_login(request: FaceLoginRequest) -> Dict[str, Any]:
+    engine = get_face_engine()
+    
+    # Run the HUD extraction
     try:
-        engine = get_face_engine()
-        incoming = engine.extract_embedding_from_data_url(request.image)
-    except FaceEngineError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    pool = get_pool()
-    rows = await pool.fetch("SELECT * FROM users")
-
-    best_user: Optional[Dict[str, Any]] = None
-    best_score = -1.0
-    best_threshold = 0.42
-
-    for row in rows:
-        user = row_to_user(row)
-        face_auth = user.get("faceAuth", {})
-        if not face_auth.get("enabled") or not face_auth.get("embedding"):
-            continue
-        stored = np.asarray(face_auth["embedding"], dtype=np.float32)
-        score = engine.cosine_similarity(incoming, stored)
-        threshold = float(face_auth.get("threshold", 0.42))
-        if score >= threshold and score > best_score:
-            best_score = score
-            best_user = user
-            best_threshold = threshold
-
-    if not best_user:
-        raise HTTPException(status_code=401, detail="Không khớp với bất kỳ Face ID đã đăng ký nào")
-
+        emb, hud_image = engine.get_embedding_and_hud(request.image)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    # If no face or too many faces, return the raw stream frame
+    if emb is None:
+        return {"message": "Không tìm thấy khuôn mặt", "user": None, "score": 0, "hudImage": hud_image}
+        
+    matched_user_id, score = engine.search_faiss(emb)
+    
+    # If FAISS rejects
+    if matched_user_id == -1:
+        return {"message": "Không khớp Face ID", "user": None, "score": 0, "hudImage": hud_image}
+        
+    user = await db_get_user_by_id(matched_user_id)
+    threshold = float(user.get("faceAuth", {}).get("threshold", 0.42))
+    
+    # If score is below threshold
+    if score < threshold:
+        return {"message": "Không đủ độ tin cậy", "user": None, "score": round(score, 4), "hudImage": hud_image}
+        
+    # SUCCESS!
     await db_append_log(
-        user=best_user["name"],
-        action=f"Đăng nhập bằng Face ID (score={best_score:.3f}, threshold={best_threshold:.2f})",
+        user=user["name"],
+        action=f"Đăng nhập Face ID qua FAISS (score={score:.3f})",
         level="success",
     )
     return {
-        "message": "Xác thực khuôn mặt thành công",
-        "user": sanitize_user(best_user),
-        "token": f"mock-token-{best_user['id']}",
-        "score": round(best_score, 4),
+        "message": "Xác thực thành công",
+        "user": sanitize_user(user),
+        "score": round(score, 4),
+        "hudImage": hud_image
     }

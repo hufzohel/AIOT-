@@ -21,7 +21,7 @@ const Monitor = () => {
   } = useCamera();
 
   // --- AI Detection Hooks ---
-  const { recognizedUser, faceScore } = useFaceRecognition(videoRef, cameraActive && enableFace);
+  const { recognizedUser, faceScore, faceHudFrame, error } = useFaceRecognition(videoRef, cameraActive && enableFace);
   const { latestCommand, hudFrame } = useGestureDetection(videoRef, cameraActive && enableGesture);
 
   // --- Display Screen Refs ---
@@ -142,7 +142,21 @@ const Monitor = () => {
             <span>Face Recognition CCTV {enableFace ? '(AI ON)' : '(AI OFF)'}</span>
             <span style={{ color: cameraActive ? '#4CAF50' : '#999' }}>● {cameraActive ? 'LIVE' : 'OFFLINE'}</span>
           </div>
-          <video ref={faceVideoRef} autoPlay playsInline muted style={{ width: '100%', height: '300px', objectFit: 'cover', transform: 'scaleX(-1)', backgroundColor: '#111' }} />
+          
+          {/* If AI is ON and we have a Python frame, show the drawn Image. Otherwise, show raw video. */}
+          {enableFace && faceHudFrame ? (
+            <img 
+              src={faceHudFrame} 
+              alt="Face Math HUD" 
+              style={{ width: '100%', height: '300px', objectFit: 'cover', transform: 'scaleX(-1)' }} 
+            />
+          ) : (
+            <video 
+              ref={faceVideoRef} 
+              autoPlay playsInline muted 
+              style={{ width: '100%', height: '300px', objectFit: 'cover', transform: 'scaleX(-1)', backgroundColor: '#111' }} 
+            />
+          )}
         </div>
 
         {/* Camera 2: Gesture Feed */}
