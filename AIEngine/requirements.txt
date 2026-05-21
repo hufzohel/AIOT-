@@ -11,3 +11,4 @@ ai-edge-litert
 torch>=2.7.0
 ultralytics>=8.0.0
 mediapipe>=0.10.0
+faiss-cpu
